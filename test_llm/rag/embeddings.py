@@ -10,7 +10,7 @@ class EmbeddingModel:
     """Класс для создания embeddings из текста"""
     
     def __init__(self):
-        model_name = "paraphrase-multilingual-MiniLM-L12-v2"
+        model_name = "ai-forever/FRIDA"
         print(f"Загрузка embedding модели: {model_name}")
         self.model = SentenceTransformer(model_name)
         print(" Модель загружена")

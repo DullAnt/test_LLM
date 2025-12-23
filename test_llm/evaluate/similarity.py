@@ -4,6 +4,7 @@
 
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
+
 from typing import Optional
 import numpy as np
 
@@ -24,7 +25,7 @@ def get_embedding_model() -> SentenceTransformer:
     return _embedding_model
 
 
-def calculate_similarity(text1: str, text2: str) -> float:
+def calculate_similarity(text1: str, text2: str, model: SentenceTransformer) -> float:
     """
     Вычисление cosine similarity между двумя текстами
     
@@ -41,7 +42,7 @@ def calculate_similarity(text1: str, text2: str) -> float:
             return 0.0
         
         # Получить модель
-        model = get_embedding_model()
+        # model = get_embedding_model()
         
         # Создать embeddings
         embedding1 = model.encode(text1)

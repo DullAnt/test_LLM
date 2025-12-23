@@ -19,6 +19,7 @@ ENV/
 *.swo
 *~
 .DS_Store
+.python-version
 
 # ==========================================
 # Проект TEST_LLM
@@ -27,21 +28,6 @@ ENV/
 # Environment variables
 .env
 .env.local
-
-# Data files - REPORTS (игнорируем)
-data/reports/*.html
-data/reports/*.json
-
-# Data files - TESTSETS (игнорируем извлеченные)
-data/testsets/*_extracted_*.jsonl
-data/testsets/questions_*.jsonl
-
-# Примеры НЕ игнорируем
-!data/testsets/example_*.jsonl
-
-# Можно раскомментировать если не хотите коммитить документы
-data/documents/*.md
-data/documents/*.txt
 
 # ==========================================
 # Docker

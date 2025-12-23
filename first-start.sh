@@ -1,0 +1,1 @@
+docker cp es01_c:/usr/share/elasticsearch/config/certs/ca/ca.crt ./data/certs/ca.crt

@@ -1,7 +1,7 @@
 """
 Клиент для работы с Elasticsearch
 """
-
+import os
 from elasticsearch import Elasticsearch
 from typing import List, Dict, Optional
 
@@ -21,10 +21,16 @@ class ElasticsearchClient:
         self.index_name = index_name
         
         # Подключение к Elasticsearch
+        # self.es = Elasticsearch(
+        #     [f"http://{host}:{port}"],
+        #     verify_certs=False,
+        #     request_timeout=30
+        # )
+
         self.es = Elasticsearch(
-            [f"http://{host}:{port}"],
-            verify_certs=False,
-            request_timeout=30
+            f"https://{host}:{port}",
+            ca_certs = "data/certs/ca.crt",
+            basic_auth = ("elastic", os.environ["ELASTIC_PASSWORD"])
         )
         
         print(f"Elasticsearch подключен ({host}:{port})")

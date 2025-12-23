@@ -2,9 +2,9 @@
 Основной Main для запуска тестирования
 """
 
-from package.CLI import parse_arguments
-from package.loader import load_documents_local, load_documents_elasticsearch, setup_directories
-from package.evaluator import RAGEvaluator
+from test_llm.package.CLI import parse_arguments
+from test_llm.package.loader import load_documents_local, load_documents_elasticsearch, setup_directories
+from test_llm.package.evaluator import RAGEvaluator
 
 
 def main():

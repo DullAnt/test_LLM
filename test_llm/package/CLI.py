@@ -3,6 +3,7 @@ CLI аргументы для TEST_LLM
 """
 
 import argparse
+import os
 
 
 def parse_arguments():
@@ -15,8 +16,8 @@ def parse_arguments():
     parser.add_argument(
         "--model",
         type=str,
-        default="qwen2.5:7b",
-        help="Ollama model (default: qwen2.5:7b)"
+        default=os.environ["OLLAMA_MODEL"],
+        help="Ollama model (default in .env)"
     )
     parser.add_argument(
         "--ollama-host",

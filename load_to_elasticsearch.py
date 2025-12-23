@@ -4,6 +4,9 @@
 
 import os
 from pathlib import Path
+
+from test_llm.package.elastic import ElasticsearchClient
+
 from typing import List
 from elasticsearch import Elasticsearch
 
@@ -12,7 +15,10 @@ def check_elasticsearch_connection(es_host: str = "localhost", es_port: int = 92
     """
     Проверка подключения к Elasticsearch
     """
-    es = Elasticsearch([f"http://{es_host}:{es_port}"])
+    # es = Elasticsearch([f"http://{es_host}:{es_port}"])
+
+    es = ElasticsearchClient()
+    es = es.es
     
     if not es.ping():
         raise ConnectionError(f"❌ Не удалось подключиться к Elasticsearch на {es_host}:{es_port}")

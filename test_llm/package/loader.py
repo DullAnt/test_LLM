@@ -4,7 +4,7 @@
 
 from typing import List, Dict, Tuple, Optional
 from pathlib import Path
-from package.elastic import ElasticsearchClient
+from .elastic import ElasticsearchClient
 
 def setup_directories():
     """Создание необходимых директорий"""

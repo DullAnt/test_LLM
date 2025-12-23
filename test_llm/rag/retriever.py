@@ -3,8 +3,8 @@ Document Retriever - поиск релевантных документов
 """
 
 from typing import List, Dict, Optional
-from rag.embeddings import EmbeddingModel
-from package.elastic import ElasticsearchClient
+from .embeddings import EmbeddingModel
+from ..package.elastic import ElasticsearchClient
 import numpy as np
 
 

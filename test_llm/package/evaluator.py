@@ -9,13 +9,13 @@ from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
 
-from rag.ollama_client import OllamaClient
-from rag.embeddings import EmbeddingModel
-from rag.retriever import DocumentRetriever
-from rag.hyde import HyDEGenerator
-from evaluate.questions import load_questions, extract_questions
-from evaluate.similarity import calculate_similarity
-from evaluate.metrics import generate_html_report
+from ..rag.ollama_client import OllamaClient
+from ..rag.embeddings import EmbeddingModel
+from ..rag.retriever import DocumentRetriever
+from ..rag.hyde import HyDEGenerator
+from ..evaluate.questions import load_questions, extract_questions
+from ..evaluate.similarity import calculate_similarity
+from ..evaluate.metrics import generate_html_report
 
 try:
     from package.ollama_detector import get_ollama_host_with_fallback
@@ -226,7 +226,7 @@ class RAGEvaluator:
                 print(f"  [LLM] Ответ ({elapsed:.1f}s): {answer[:80]}...")
                 
                 # Оценка
-                similarity = calculate_similarity(answer, expected_answer)
+                similarity = calculate_similarity(answer, expected_answer, retriever.embedding_model.model)
                 is_correct = similarity >= self.threshold
                 
                 status = "[OK]" if is_correct else "[FAIL]"
