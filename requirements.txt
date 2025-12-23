@@ -1,0 +1,7 @@
+
+sentence-transformers>=2.2.0   # Embeddings
+numpy>=1.24.0,<2.0.0          # <2.0 важно!
+scikit-learn>=1.3.0            # Similarity
+elasticsearch==8.12.0          # База данных
+requests>=2.31.0               # Ollama API
+python-dotenv>=1.0.0           # .env файлы

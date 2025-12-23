@@ -1,0 +1,62 @@
+# ==========================================
+# Python
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==========================================
+# Проект TEST_LLM
+# ==========================================
+
+# Environment variables
+.env
+.env.local
+
+# Data files - REPORTS (игнорируем)
+data/reports/*.html
+data/reports/*.json
+
+# Data files - TESTSETS (игнорируем извлеченные)
+data/testsets/*_extracted_*.jsonl
+data/testsets/questions_*.jsonl
+
+# Примеры НЕ игнорируем
+!data/testsets/example_*.jsonl
+
+# Можно раскомментировать если не хотите коммитить документы
+data/documents/*.md
+data/documents/*.txt
+
+# ==========================================
+# Docker
+# ==========================================
+docker-compose.override.yml
+volumes/
+
+# ==========================================
+# Logs
+# ==========================================
+*.log
+logs/
+
+# ==========================================
+# OS
+# ==========================================
+Thumbs.db
+.DS_Store

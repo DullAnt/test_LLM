@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  # ==========================================
+  # Elasticsearch - Хранилище документов
+  # ==========================================
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: test_llm_elasticsearch
+    environment:
+      # Single-node режим (достаточно для разработки)
+      - discovery.type=single-node
+      
+      # ВАЖНО: Отключаем security для простоты
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      
+      # Память JVM (минимум для работы)
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      
+      # Отключаем ML (не нужно для RAG)
+      - xpack.ml.enabled=false
+      
+      # Имя кластера
+      - cluster.name=test_llm_cluster
+      - node.name=test_llm_node
+    
+    ports:
+      - "9200:9200"   # REST API
+      - "9300:9300"   # Node communication
+    
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    
+    networks:
+      - test_llm_network
+    
+    # Ограничение памяти (важно для Docker Desktop)
+    mem_limit: 1g
+    
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ==========================================
+  # Ollama - LLM для генерации ответов
+  # (опционально, если нет локальной)
+  # # ==========================================
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: test_llm_ollama
+    
+  #   ports:
+  #     # ВАЖНО: Порт 11435 чтобы не конфликтовать с локальной Ollama (11434)
+  #     - "11435:11434"
+    
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+    
+  #   networks:
+  #     - test_llm_network
+    
+  #   # Ограничение памяти (минимум 4GB для моделей 7B)
+  #   mem_limit: 4g
+    
+  #   healthcheck:
+  #     test: ["CMD", "ollama", "list"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 30s
+    
+  #   # Раскомментируйте для NVIDIA GPU
+  #   deploy:
+  #     resources:
+  #       reservations:
+  #         devices:
+  #           - driver: nvidia
+  #             count: 1
+  #             capabilities: [gpu]
+
+  # ==========================================
+  # Kibana - Web UI для Elasticsearch
+  # (опционально, для дебага)
+  # ==========================================
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: test_llm_kibana
+    
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    
+    environment:
+      - SERVERNAME=kibana
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=changeme
+      
+      # Отключаем security
+      - XPACK_SECURITY_ENABLED=false
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=min-32-byte-long-string-for-encryption
+    
+    ports:
+      - "5601:5601"
+    
+    networks:
+      - test_llm_network
+    
+    mem_limit: 1g
+    
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    
+    # Закомментируйте profiles чтобы Kibana запускалась всегда
+    # Или используйте: docker-compose --profile debug up -d
+    # profiles:
+    #   - debug
+
+# ==========================================
+# Volumes - Постоянное хранилище данных
+# ==========================================
+volumes:
+  es_data:
+    driver: local
+  ollama_data:
+    driver: local
+
+# ==========================================
+# Networks - Изолированная сеть
+# ==========================================
+networks:
+  test_llm_network:
+    driver: bridge
