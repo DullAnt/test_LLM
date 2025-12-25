@@ -1,16 +1,5 @@
 # TEST_LLM - Система тестирования RAG
 
-Система для тестирования качества RAG (Retrieval-Augmented Generation) с векторным поиском через Elasticsearch и локальными LLM через Ollama.
-
-## Возможности
-
-- Векторный поиск релевантных документов через Elasticsearch
-- Генерация ответов через локальные LLM модели
-- Автоматическое тестирование на наборе вопросов
-- Метрики качества и HTML отчеты
-- Поддержка HyDE для улучшения поиска
-- Автоопределение размерности любых embedding моделей с HuggingFace
-
 ## Требования
 
 - Python 3.10+
@@ -394,11 +383,3 @@ SIMILARITY_THRESHOLD=0.70
 ```
 python main.py --testset data/testsets/production_questions.jsonl --hyde
 ```
-
-## Лицензия
-
-MIT License
-
-## Контакты
-
-Для вопросов и предложений создавайте Issues в репозитории.
