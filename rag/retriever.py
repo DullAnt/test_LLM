@@ -1,325 +1,304 @@
 """
-Document Retriever - поиск релевантных документов
+Модуль для векторного поиска релевантных документов
 """
 
 from typing import List, Dict, Optional
-from rag.embeddings import EmbeddingModel
-from package.elastic import ElasticsearchClient
+from elasticsearch import Elasticsearch
 import numpy as np
-
+import requests
+from package.config import get_embedding_model, EmbeddingModel, DEFAULT_TOP_K 
+from rag.ollama_client import OllamaClient
 
 class DocumentRetriever:
-    """Поиск релевантных документов"""
+    """Класс для векторного поиска документов"""
     
     def __init__(
-        self,
-        embedding_model: EmbeddingModel,
-        top_k: int = 3,
-        es_client: Optional[ElasticsearchClient] = None,
-        es_index: Optional[str] = None,
-        documents: Optional[List[Dict]] = None
-    ):
-        """
-        Args:
-            embedding_model: Модель для векторизации
-            top_k: Количество результатов
-            es_client: Клиент Elasticsearch (опционально)
-            es_index: Название индекса (опционально)
-            documents: Локальные документы (опционально)
-        """
-        self.embedding_model = embedding_model
-        self.top_k = top_k
-        self.es_client = es_client
-        self.es_index = es_index
-        self.documents = documents
-        
-        # Определить режим работы
-        self.use_elasticsearch = es_client is not None and es_index is not None
-        
-        # Инициализация
-        if self.use_elasticsearch:
-            self._init_elasticsearch()
-        else:
-            self._init_local()
-    
-    def _init_elasticsearch(self):
-        """Инициализация Elasticsearch retriever"""
-        try:
-            # Проверка подключения
-            if not self.es_client.ping():
-                raise Exception("Не удалось подключиться к Elasticsearch")
-            
-            # Проверка индекса
-            if not self.es_client.index_exists():
-                raise Exception(f"Индекс '{self.es_index}' не существует")
-            
-            # Получение количества документов
-            doc_count = self.es_client.get_document_count()
-            
-            if doc_count == 0:
-                raise Exception(f"Индекс '{self.es_index}' пустой")
-            
-            print(f"[RETRIEVER] Режим: Elasticsearch (индекс: {self.es_index})")
-            print(f"[RETRIEVER] Документов: {doc_count}")
-            
-        except Exception as e:
-            print(f"[ERROR] Ошибка инициализации Elasticsearch: {e}")
-            raise
-    
-    def _init_local(self):
-        """Инициализация локального retriever"""
-        if not self.documents:
-            raise ValueError("Документы не предоставлены для локального режима")
-        
-        print(f"[RETRIEVER] Режим: Локальные документы")
-        print(f"[RETRIEVER] Документов: {len(self.documents)}")
-        
-        # Разбить документы на chunks
-        self.chunks = []
-        for doc in self.documents:
-            doc_chunks = self._split_into_chunks(doc['content'])
-            for chunk in doc_chunks:
-                self.chunks.append({
-                    'text': chunk,
-                    'filename': doc.get('filename', 'unknown'),
-                    'source_doc': doc
-                })
-        
-        print(f"[RETRIEVER] Chunks: {len(self.chunks)}")
-        
-        # Векторизация всех chunks
-        print(f"[RETRIEVER] Векторизация chunks...")
-        chunk_texts = [c['text'] for c in self.chunks]
-        self.chunk_embeddings = self.embedding_model.encode_batch(chunk_texts)
-        print(f"[RETRIEVER] ✅ Векторизация завершена")
-    
-    def _split_into_chunks(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-        """
-        Разбить текст на chunks
-        
-        Args:
-            text: Исходный текст
-            chunk_size: Размер chunk в символах
-            overlap: Перекрытие между chunks
-            
-        Returns:
-            List[str]: Список chunks
-        """
-        # Разбить по параграфам
-        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
-        
-        chunks = []
-        current_chunk = ""
-        
-        for paragraph in paragraphs:
-            # Если параграф + текущий chunk меньше лимита
-            if len(current_chunk) + len(paragraph) <= chunk_size:
-                current_chunk += paragraph + "\n\n"
+            self,
+            embedding_model: EmbeddingModel,
+            es_client: Optional[Elasticsearch] = None,
+            index_name: str = "psb_docs",
+            top_k: int = DEFAULT_TOP_K,
+            ollama_client: Optional[OllamaClient] = None
+        ):
+            self.embedding_model = embedding_model
+            self.es_client = es_client
+            self.index_name = index_name
+            self.top_k = top_k
+            self.ollama_client = ollama_client
+
+            # ES URL для прямых HTTP запросов
+            if es_client:
+                # Получаем хост из клиента
+                self.es_url = "http://localhost:9200"
             else:
-                # Сохранить текущий chunk
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                
-                # Начать новый chunk
-                current_chunk = paragraph + "\n\n"
-        
-        # Добавить последний chunk
-        if current_chunk:
-            chunks.append(current_chunk.strip())
-        
-        return chunks
+                self.es_url = None
     
-    def retrieve(self, query: str) -> List[str]:
+    def retrieve_with_scores(
+        self, 
+        question: str, 
+        return_hyde_info: bool = False,
+        top_k: Optional[int] = None
+    ) -> List[Dict]:
         """
-        Поиск релевантных chunks
+        Поиск релевантных chunks с метаданными
         
         Args:
-            query: Поисковый запрос
+            question: Вопрос для поиска
+            return_hyde_info: Вернуть информацию о HyDE (не используется пока)
+            top_k: Количество результатов (если None - использует self.top_k)
             
         Returns:
-            List[str]: Список релевантных chunks
+            Список chunks с score и метаданными
         """
-        if self.use_elasticsearch:
-            return self._retrieve_elasticsearch(query)
-        else:
-            return self._retrieve_local(query)
-    
-    def _retrieve_elasticsearch(self, query: str) -> List[str]:
-        """Поиск в Elasticsearch"""
-        try:
-            # Поиск через Elasticsearch
-            response = self.es_client.es.search(
-                index=self.es_index,
-                body={
-                    "query": {
-                        "multi_match": {
-                            "query": query,
-                            "fields": ["content", "chunks"]
-                        }
-                    },
-                    "size": self.top_k * 2
-                }
-            )
-            
-            # Извлечь chunks из результатов
-            chunks = []
-            for hit in response['hits']['hits']:
-                doc = hit['_source']
-                
-                # Если есть chunks - взять их
-                if 'chunks' in doc and doc['chunks']:
-                    if isinstance(doc['chunks'], list):
-                        chunks.extend(doc['chunks'][:self.top_k])
-                    else:
-                        chunks.append(doc['chunks'])
-                else:
-                    # Иначе разбить content на chunks
-                    doc_chunks = self._split_into_chunks(doc['content'])
-                    chunks.extend(doc_chunks[:2])
-            
-            # Ограничить результат
-            chunks = chunks[:self.top_k]
-            
-            return chunks
-            
-        except Exception as e:
-            print(f"[ERROR] Ошибка поиска в Elasticsearch: {e}")
-            return []
-    
-    def _retrieve_local(self, query: str) -> List[str]:
-        """Поиск в локальных документах"""
-        # Векторизация запроса
-        query_embedding = self.embedding_model.encode(query)
+        # Используем переданный top_k или self.top_k
+        k = top_k if top_k is not None else self.top_k
         
-        # Вычислить similarity для всех chunks
-        similarities = []
-        for chunk_embedding in self.chunk_embeddings:
-            # Косинусное сходство
-            similarity = np.dot(query_embedding, chunk_embedding) / (
-                np.linalg.norm(query_embedding) * np.linalg.norm(chunk_embedding)
-            )
-            similarities.append(similarity)
-        
-        # Отсортировать по similarity
-        top_indices = np.argsort(similarities)[-self.top_k:][::-1]
-        
-        # Извлечь top chunks
-        top_chunks = [self.chunks[i]['text'] for i in top_indices]
-        
-        return top_chunks
-    
-    def retrieve_with_scores(self, query: str, return_hyde_info: bool = False) -> List[Dict]:
+        if return_hyde_info:
+            # 1. Генерация гипотезы
+            print(f"[HYDE] Генерация гипотезы для: {question[:80]}...")
+            hypothesis = self._generate_hypothesis(question)
+            print(f"[HYDE] Гипотеза: {hypothesis[:100]}...")
+            return self.search(hypothesis, top_k=k)
+
+        # Вызываем основной метод поиска
+        return self.search(question, top_k=k)
+            
+    def search(self, query: str, top_k: Optional[int] = None) -> List[Dict]:
         """
-        Поиск релевантных chunks с scores
+        Поиск релевантных chunks через векторное сходство
         
         Args:
-            query: Поисковый запрос
-            return_hyde_info: Вернуть информацию о HyDE (не используется)
+            query: Вопрос для поиска
+            top_k: Количество результатов (если None - использует self.top_k)
             
         Returns:
-            List[Dict]: Список словарей с 'text', 'score', 'rank', 'source'
+            Список chunks с косинусным сходством
         """
-        if self.use_elasticsearch:
-            return self._retrieve_elasticsearch_with_scores(query)
+        # Используем переданный top_k или self.top_k
+        k = top_k if top_k is not None else self.top_k
+        
+        if self.es_client:
+            return self._search_elasticsearch_knn(query, k)
         else:
-            return self._retrieve_local_with_scores(query)
+            return self._search_local(query, k)
     
-    def _retrieve_elasticsearch_with_scores(self, query: str) -> List[Dict]:
-        """Поиск в Elasticsearch с scores"""
+    def _search_elasticsearch_knn(self, query: str, top_k: int) -> List[Dict]:
+        """
+        kNN поиск в Elasticsearch (векторный поиск)
+        Использует прямой HTTP запрос для совместимости со всеми версиями
+        """
+        # Вычисляем вектор вопроса
+        query_vector = self.embedding_model.encode(query).tolist()
+        
+        # DEBUG
+        print(f"\n{'='*60}")
+        print(f"[DEBUG kNN SEARCH]")
+        print(f"Вопрос: {query[:80]}")
+        print(f"Вектор длина: {len(query_vector)}")
+        print(f"Первые 5 чисел: {query_vector[:5]}")
+        print(f"TOP-K запрошено: {top_k}")
+        print(f"Index: {self.index_name}")
+        print(f"{'='*60}")
+        
         try:
-            # Поиск через Elasticsearch
-            response = self.es_client.es.search(
-                index=self.es_index,
-                body={
-                    "query": {
-                        "multi_match": {
-                            "query": query,
-                            "fields": ["content", "chunks"]
-                        }
-                    },
-                    "size": self.top_k * 2
-                }
-            )
+            print(f"[DEBUG] Отправка kNN запроса...")
             
-            # Извлечь chunks с scores
+            # ПРЯМОЙ HTTP ЗАПРОС (работает с любой версией ES клиента)
+            url = f"{self.es_url}/{self.index_name}/_search"
+            
+            body = {
+                "knn": {
+                    "field": "embedding",
+                    "query_vector": query_vector,
+                    "k": top_k,
+                    "num_candidates": 100
+                },
+                "_source": ["content", "filename", "chunk_id", "total_chunks"]
+            }
+            
+            response = requests.post(url, json=body, headers={"Content-Type": "application/json"})
+            response.raise_for_status()
+            data = response.json()
+            
+            hits_count = len(data['hits']['hits'])
+            print(f"[DEBUG] Получено hits: {hits_count}")
+            
+            if hits_count == 0:
+                print(f"[WARNING] Ничего не найдено!")
+                print(f"[DEBUG] Проверьте что вектора загружены: curl http://localhost:9200/{self.index_name}/_search?size=1")
+                return []
+            
             results = []
-            for hit in response['hits']['hits']:
-                doc = hit['_source']
+            for rank, hit in enumerate(data['hits']['hits'], 1):
+                source = hit['_source']
                 score = hit['_score']
                 
-                # Нормализовать score (ES scores обычно 0-10)
-                normalized_score = min(score / 10.0, 1.0)
+                print(f"\n[DEBUG] Chunk #{rank}:")
+                print(f"  Score: {score:.4f}")
+                print(f"  File: {source['filename']}")
+                print(f"  Chunk: {source.get('chunk_id', '?')}/{source.get('total_chunks', '?')}")
+                print(f"  Text preview: {source['content'][:100]}...")
                 
-                # Если есть chunks - взять их
-                if 'chunks' in doc and doc['chunks']:
-                    if isinstance(doc['chunks'], list):
-                        for chunk in doc['chunks'][:self.top_k]:
-                            results.append({
-                                'text': chunk,
-                                'score': normalized_score,
-                                'rank': len(results) + 1,
-                                'source': doc.get('filename', 'unknown')
-                            })
-                    else:
-                        results.append({
-                            'text': doc['chunks'],
-                            'score': normalized_score,
-                            'rank': len(results) + 1,
-                            'source': doc.get('filename', 'unknown')
-                        })
-                else:
-                    # Иначе разбить content на chunks
-                    doc_chunks = self._split_into_chunks(doc['content'])
-                    for chunk in doc_chunks[:2]:
-                        results.append({
-                            'text': chunk,
-                            'score': normalized_score,
-                            'rank': len(results) + 1,
-                            'source': doc.get('filename', 'unknown')
-                        })
+                results.append({
+                    'text': source['content'],
+                    'score': score,
+                    'rank': rank,
+                    'source': source['filename'],
+                    'chunk_id': source.get('chunk_id', 0),
+                    'total_chunks': source.get('total_chunks', 0)
+                })
             
-            # Ограничить результат
-            results = results[:self.top_k]
-            
+            print(f"\n[DEBUG] Возвращаем {len(results)} chunks")
+            print(f"{'='*60}\n")
             return results
             
+        except requests.exceptions.RequestException as e:
+            print(f"\n[ERROR kNN] HTTP ошибка: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"[ERROR] Response: {e.response.text}")
+            return []
         except Exception as e:
-            print(f"[ERROR] Ошибка поиска в Elasticsearch: {e}")
+            print(f"\n[ERROR kNN] Ошибка при поиске: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
-    def _retrieve_local_with_scores(self, query: str) -> List[Dict]:
-        """Поиск в локальных документах с scores"""
-        # Векторизация запроса
-        query_embedding = self.embedding_model.encode(query)
+    def _generate_hypothesis(self, question: str) -> str:
+        """
+        Генерация гипотетического ответа для HyDE
         
-        # Вычислить similarity для всех chunks
-        similarities = []
-        for chunk_embedding in self.chunk_embeddings:
-            # Косинусное сходство
-            similarity = np.dot(query_embedding, chunk_embedding) / (
-                np.linalg.norm(query_embedding) * np.linalg.norm(chunk_embedding)
-            )
-            similarities.append(float(similarity))
-        
-        # Отсортировать по similarity
-        top_indices = np.argsort(similarities)[-self.top_k:][::-1]
-        
-        # Извлечь top chunks с scores
-        results = []
-        for rank, idx in enumerate(top_indices, 1):
-            chunk_text = self.chunks[idx]['text']
-            score = similarities[idx]
-            source = self.chunks[idx].get('filename', 'unknown')
+        Args:
+            question: Вопрос пользователя
             
-            results.append({
-                'text': chunk_text,
-                'score': score,
-                'rank': rank,
-                'source': source
-            })
+        Returns:
+            Гипотетический ответ (используется вместо вопроса для поиска)
+        """
+        if not self.ollama_client:
+            print(f"[HYDE] Ollama client не инициализирован, используем вопрос")
+            return question
         
-        return results
+        # Промпт для генерации гипотезы
+        hyde_prompt = f"""Ты - эксперт банка ПСБ. Ответь кратко и точно на вопрос (2-3 предложения).
+            НЕ объясняй, просто дай прямой ответ как в официальном документе.
+
+            Вопрос: {question}
+
+            Ответ:"""
+            
+        try:
+            print(f"[HYDE] Вызов LLM для генерации гипотезы...")
+            
+            # Генерация через Ollama
+            hypothesis = self.ollama_client.generate(
+                question=hyde_prompt,  
+                context=[]  
+                )
+            
+            
+            # Очистка ответа
+            hypothesis = hypothesis.strip()
+            
+            # Ограничение длины (макс 500 символов)
+            if len(hypothesis) > 500:
+                hypothesis = hypothesis[:500]
+            
+            print(f"[HYDE] Гипотеза: {hypothesis[:100]}...")
+            return hypothesis
+            
+        except Exception as e:
+            print(f"[HYDE] ⚠️  Ошибка генерации: {e}")
+            print(f"[HYDE] Используем оригинальный вопрос")
+            return question
+
+    def _search_local(self, query: str, top_k: int) -> List[Dict]:
+            """
+            Локальный поиск (без Elasticsearch)
+            Для совместимости с --local-files
+            """
+            if not hasattr(self, 'local_chunks'):
+                return []
+            
+            # Вектор вопроса
+            query_embedding = self.embedding_model.encode(query)
+            
+            # Вычисляем косинусное сходство со всеми chunks
+            from sklearn.metrics.pairwise import cosine_similarity
+            
+            results = []
+            for chunk in self.local_chunks:
+                chunk_embedding = self.embedding_model.encode(chunk['text'])
+                
+                # Косинусное сходство
+                score = cosine_similarity(
+                    [query_embedding],
+                    [chunk_embedding]
+                )[0][0]
+                
+                results.append({
+                    'text': chunk['text'],
+                    'score': float(score),
+                    'source': chunk['source'],
+                    'rank': 0
+                })
+            
+            # Сортировка по score
+            results.sort(key=lambda x: x['score'], reverse=True)
+            
+            # TOP-K
+            for i, result in enumerate(results[:top_k], 1):
+                result['rank'] = i
+            
+            return results[:top_k]
     
-    def __repr__(self):
-        mode = "Elasticsearch" if self.use_elasticsearch else "Local"
-        return f"DocumentRetriever(mode={mode}, top_k={self.top_k})"
+    def load_local_files(self, docs_path: str = "data/documents"):
+        """
+        Загрузка локальных файлов для поиска без Elasticsearch
+        """
+        from pathlib import Path
+        
+        docs_dir = Path(docs_path)
+        if not docs_dir.exists():
+            raise FileNotFoundError(f"Папка {docs_path} не найдена")
+        
+        files = list(docs_dir.glob("*.txt")) + list(docs_dir.glob("*.md"))
+        files = [f for f in files if f.name.lower() != "readme.md"]
+        
+        self.local_chunks = []
+        
+        for file_path in files:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # Разбиваем на chunks
+                chunks = self._split_text(content)
+                
+                for chunk in chunks:
+                    self.local_chunks.append({
+                        'text': chunk,
+                        'source': file_path.name
+                    })
+            except Exception as e:
+                print(f"Ошибка при чтении {file_path.name}: {e}")
+        
+        print(f"Загружено {len(self.local_chunks)} chunks из локальных файлов")
+    
+    def _split_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
+        """Разбивка текста на chunks"""
+        chunks = []
+        start = 0
+        text_length = len(text)
+        
+        while start < text_length:
+            end = min(start + chunk_size, text_length)
+            chunk = text[start:end].strip()
+            
+            if chunk:
+                chunks.append(chunk)
+            
+            start = end - overlap
+            
+            if start >= text_length - overlap:
+                break
+        
+        return chunks

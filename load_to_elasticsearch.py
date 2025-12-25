@@ -1,53 +1,42 @@
 """
-Загрузка документов в Elasticsearch с разбивкой на chunks
+Загрузка документов в Elasticsearch с векторами (embeddings)
 """
-
 import os
 from pathlib import Path
 from typing import List
 from elasticsearch import Elasticsearch
+from package.config import get_embedding_model, DEFAULT_EMBEDDING_DIMS
 
 
 def check_elasticsearch_connection(es_host: str = "localhost", es_port: int = 9200) -> Elasticsearch:
-    """
-    Проверка подключения к Elasticsearch
-    """
+    """Проверка подключения к Elasticsearch"""
     es = Elasticsearch([f"http://{es_host}:{es_port}"])
     
     if not es.ping():
-        raise ConnectionError(f"❌ Не удалось подключиться к Elasticsearch на {es_host}:{es_port}")
+        raise ConnectionError(f"Не удалось подключиться к Elasticsearch на {es_host}:{es_port}")
     
-    print(f"✅ Подключено к Elasticsearch: {es_host}:{es_port}")
+    print(f"Подключено к Elasticsearch: {es_host}:{es_port}")
     return es
 
 
-def create_index(es: Elasticsearch, index_name: str) -> None:
-    """
-    Создание индекса с настройками
-    """
-    # Удалить индекс если существует
+def create_index_with_vectors(es: Elasticsearch, index_name: str) -> None:
+    """Создание индекса с поддержкой векторов"""
+    
     if es.indices.exists(index=index_name):
-        print(f"⚠️  Индекс '{index_name}' уже существует. Удаляем...")
+        print(f"Индекс '{index_name}' уже существует. Удаляем...")
         es.indices.delete(index=index_name)
     
-    # Настройки индекса
+    # Настройки индекса с векторным полем
     settings = {
         "settings": {
             "number_of_shards": 1,
-            "number_of_replicas": 0,
-            "analysis": {
-                "analyzer": {
-                    "russian": {
-                        "type": "standard"
-                    }
-                }
-            }
+            "number_of_replicas": 0
         },
         "mappings": {
             "properties": {
                 "content": {
                     "type": "text",
-                    "analyzer": "russian"
+                    "analyzer": "standard"
                 },
                 "filename": {
                     "type": "keyword"
@@ -57,45 +46,36 @@ def create_index(es: Elasticsearch, index_name: str) -> None:
                 },
                 "total_chunks": {
                     "type": "integer"
+                },
+                "embedding": {
+                    "type": "dense_vector",
+                    "dims": DEFAULT_EMBEDDING_DIMS,
+                    "index": True,
+                    "similarity": "cosine"
                 }
             }
         }
     }
     
     es.indices.create(index=index_name, body=settings)
-    print(f"✅ Индекс '{index_name}' создан")
+    print(f"Индекс '{index_name}' создан с поддержкой векторного поиска")
 
 
 def split_into_chunks(text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-    """
-    Разбивает текст на chunks с перекрытием
-    
-    Args:
-        text: Исходный текст
-        chunk_size: Размер chunk в символах
-        overlap: Перекрытие между chunks
-    
-    Returns:
-        Список chunks
-    """
+    """Разбивает текст на chunks с перекрытием"""
     chunks = []
     start = 0
     text_length = len(text)
     
     while start < text_length:
-        # Конец chunk
         end = min(start + chunk_size, text_length)
-        
-        # Вырезаем chunk
         chunk = text[start:end].strip()
         
-        if chunk:  # Если chunk не пустой
+        if chunk:
             chunks.append(chunk)
         
-        # Следующая позиция с учетом overlap
         start = end - overlap
         
-        # Избегаем бесконечного цикла
         if start >= text_length - overlap:
             break
     
@@ -103,56 +83,52 @@ def split_into_chunks(text: str, chunk_size: int = 500, overlap: int = 50) -> Li
 
 
 def find_documents(docs_path: str = "data/documents") -> List[Path]:
-    """
-    Поиск всех .txt и .md файлов
-    """
+    """Поиск всех .txt и .md файлов"""
     docs_dir = Path(docs_path)
     
     if not docs_dir.exists():
-        raise FileNotFoundError(f"❌ Папка {docs_path} не найдена")
+        raise FileNotFoundError(f"Папка {docs_path} не найдена")
     
-    # Найти все .txt и .md файлы
     files = list(docs_dir.glob("*.txt")) + list(docs_dir.glob("*.md"))
-    
-    # Исключить README файлы
     files = [f for f in files if f.name.lower() != "readme.md"]
     
     if not files:
-        raise FileNotFoundError(f"❌ Не найдено .txt или .md файлов в {docs_path}")
+        raise FileNotFoundError(f"Не найдено .txt или .md файлов в {docs_path}")
     
-    print(f"📁 Найдено документов: {len(files)}")
+    print(f"Найдено документов: {len(files)}")
     for f in files:
         print(f"   - {f.name}")
     
     return files
 
 
-def load_documents(
+def load_documents_with_vectors(
     es: Elasticsearch,
     files: List[Path],
     index_name: str,
     chunk_size: int = 500,
     overlap: int = 50
 ) -> None:
-    """
-    Загрузка документов с разбивкой на chunks
-    """
+    """Загрузка документов с векторами"""
+    
+    # Получить embedding модель
+    print("\nИнициализация embedding модели...")
+    embedding_model = get_embedding_model()
+    
     total_docs = 0
     total_chunks = 0
     total_chars = 0
     
     for file_path in files:
-        print(f"\n📄 Обработка: {file_path.name}")
+        print(f"\nОбработка: {file_path.name}")
         
-        # Читаем файл
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
         except UnicodeDecodeError:
-            print(f"   ⚠️  Не удалось прочитать (неверная кодировка), пропускаем")
+            print(f"   Не удалось прочитать (неверная кодировка), пропускаем")
             continue
         
-        # Статистика
         char_count = len(content)
         total_chars += char_count
         
@@ -160,16 +136,26 @@ def load_documents(
         chunks = split_into_chunks(content, chunk_size=chunk_size, overlap=overlap)
         chunk_count = len(chunks)
         
-        print(f"   📊 Символов: {char_count:,}")
-        print(f"   🔪 Chunks: {chunk_count}")
+        print(f"   Символов: {char_count:,}")
+        print(f"   Chunks: {chunk_count}")
         
-        # Загружаем каждый chunk
-        for i, chunk_text in enumerate(chunks, 1):
+        # Вычисляем векторы для ВСЕХ chunks сразу (быстрее)
+        print(f"   Вычисление векторов...")
+        chunk_embeddings = embedding_model.encode(
+            chunks, 
+            show_progress_bar=True,
+            convert_to_numpy=True
+        )
+        
+        # Загружаем каждый chunk с вектором
+        print(f"   Загрузка в Elasticsearch...")
+        for i, (chunk_text, embedding) in enumerate(zip(chunks, chunk_embeddings), 1):
             doc = {
                 "content": chunk_text,
                 "filename": file_path.name,
                 "chunk_id": i,
-                "total_chunks": chunk_count
+                "total_chunks": chunk_count,
+                "embedding": embedding.tolist()  # Вектор (384 числа)
             }
             
             es.index(index=index_name, document=doc)
@@ -177,32 +163,27 @@ def load_documents(
         total_docs += 1
         total_chunks += chunk_count
         
-        print(f"   ✅ Загружено {chunk_count} chunks")
+        print(f"   Загружено {chunk_count} chunks с векторами")
     
-    print(f"\n" + "="*60)
-    print(f"🎉 ИТОГО:")
+    print(f"\n{'='*60}")
+    print(f"ИТОГО:")
     print(f"   Документов: {total_docs}")
     print(f"   Chunks: {total_chunks}")
     print(f"   Символов: {total_chars:,}")
+    print(f"   Векторов: {total_chunks} x 384 = {total_chunks * 384:,} чисел")
     print("="*60)
 
 
 def verify_index(es: Elasticsearch, index_name: str) -> None:
-    """
-    Проверка индекса после загрузки
-    """
-    # Refresh индекса
+    """Проверка индекса после загрузки"""
     es.indices.refresh(index=index_name)
     
-    # Количество документов
     count = es.count(index=index_name)['count']
-    
-    # Размер индекса
     stats = es.indices.stats(index=index_name)
     size_bytes = stats['indices'][index_name]['total']['store']['size_in_bytes']
     size_mb = size_bytes / (1024 * 1024)
     
-    print(f"\n📊 ПРОВЕРКА ИНДЕКСА '{index_name}':")
+    print(f"\nПРОВЕРКА ИНДЕКСА '{index_name}':")
     print(f"   Документов (chunks): {count}")
     print(f"   Размер: {size_mb:.2f} MB")
     
@@ -210,41 +191,39 @@ def verify_index(es: Elasticsearch, index_name: str) -> None:
     result = es.search(index=index_name, body={"size": 1, "query": {"match_all": {}}})
     if result['hits']['hits']:
         doc = result['hits']['hits'][0]['_source']
-        print(f"\n📝 Пример chunk:")
+        print(f"\nПример chunk:")
         print(f"   Файл: {doc['filename']}")
         print(f"   Chunk: {doc['chunk_id']}/{doc['total_chunks']}")
-        print(f"   Длина: {len(doc['content'])} символов")
+        print(f"   Длина текста: {len(doc['content'])} символов")
+        print(f"   Длина вектора: {len(doc['embedding'])} чисел")
         print(f"   Текст: {doc['content'][:100]}...")
 
 
 def main():
-    """
-    Главная функция
-    """
+    """Главная функция"""
     print("="*60)
-    print("🚀 ЗАГРУЗКА ДОКУМЕНТОВ В ELASTICSEARCH")
+    print("ЗАГРУЗКА ДОКУМЕНТОВ С ВЕКТОРАМИ В ELASTICSEARCH")
     print("="*60)
     
-    # Настройки
     ES_HOST = "localhost"
     ES_PORT = 9200
     INDEX_NAME = "psb_docs"
     DOCS_PATH = "data/documents"
-    CHUNK_SIZE = 500  # Размер chunk в символах
-    OVERLAP = 50      # Перекрытие между chunks
+    CHUNK_SIZE = 500
+    OVERLAP = 50
     
     try:
         # 1. Подключение
         es = check_elasticsearch_connection(ES_HOST, ES_PORT)
         
-        # 2. Создание индекса
-        create_index(es, INDEX_NAME)
+        # 2. Создание индекса с векторами
+        create_index_with_vectors(es, INDEX_NAME)
         
         # 3. Поиск документов
         files = find_documents(DOCS_PATH)
         
-        # 4. Загрузка с разбивкой на chunks
-        load_documents(
+        # 4. Загрузка с векторами
+        load_documents_with_vectors(
             es=es,
             files=files,
             index_name=INDEX_NAME,
@@ -255,12 +234,12 @@ def main():
         # 5. Проверка
         verify_index(es, INDEX_NAME)
         
-        print(f"\n✅ Загрузка завершена успешно!")
-        print(f"🔍 Проверить в Kibana: http://localhost:5601")
-        print(f"📊 Количество chunks: curl http://localhost:9200/{INDEX_NAME}/_count")
+        print(f"\nЗагрузка завершена успешно!")
+        print(f"Проверить в Kibana: http://localhost:5601")
+        print(f"Количество chunks: curl http://localhost:9200/{INDEX_NAME}/_count")
         
     except Exception as e:
-        print(f"\n❌ ОШИБКА: {e}")
+        print(f"\nОШИБКА: {e}")
         import traceback
         traceback.print_exc()
         return 1

@@ -3,6 +3,7 @@
 """
 
 import requests
+from package.config import DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_HOST
 
 
 def detect_ollama():
@@ -14,7 +15,7 @@ def detect_ollama():
     """
     
     # Проверка локальной Ollama (порт 11434)
-    local_host = "http://localhost:11434"
+    local_host = DEFAULT_OLLAMA_HOST
     if check_ollama(local_host):
         return local_host, 'local'
     
@@ -66,7 +67,7 @@ def print_ollama_status():
         print("   1. Установить локально: https://ollama.com/download")
         print("   2. Запустить в Docker:")
         print("      docker-compose up -d ollama")
-        print("      docker exec test_llm_ollama ollama pull qwen2.5:7b")
+        print("      docker exec test_llm_ollama ollama pull {DEFAULT_OLLAMA_MODEL}")
         return None, None
 
 

@@ -8,7 +8,6 @@ from package.elastic import ElasticsearchClient
 
 def setup_directories():
     """Создание необходимых директорий"""
-    from pathlib import Path
     
     # Создать необходимые папки
     directories = [

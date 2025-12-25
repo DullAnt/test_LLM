@@ -4,6 +4,18 @@ CLI аргументы для TEST_LLM
 
 import argparse
 
+from package.config import (
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_HOST,
+    DEFAULT_OLLAMA_TIMEOUT,
+    DEFAULT_ELASTIC_HOST,
+    DEFAULT_ELASTIC_PORT,
+    DEFAULT_ELASTIC_INDEX,
+    DEFAULT_SIMILARITY_THRESHOLD,
+    DEFAULT_TOP_K
+)
+
+
 
 def parse_arguments():
     """Парсинг аргументов командной строки"""
@@ -15,33 +27,33 @@ def parse_arguments():
     parser.add_argument(
         "--model",
         type=str,
-        default="qwen2.5:7b",
-        help="Ollama model (default: qwen2.5:7b)"
+        default=DEFAULT_OLLAMA_MODEL,
+        help="Ollama model (default: {DEFAULT_OLLAMA_MODEL})"
     )
     parser.add_argument(
         "--ollama-host",
         type=str,
-        default="http://localhost:11434",
+        default=DEFAULT_OLLAMA_HOST,
         help="Ollama host URL"
     )
     parser.add_argument(
         "--timeout",
         type=int,
-        default=600,
-        help="Timeout in seconds (default: 600)"
+        default=DEFAULT_OLLAMA_TIMEOUT,
+        help="Timeout in seconds (default: {DEFAULT_OLLAMA_TIMEOUT})"
     )
     
     # Источник данных
     parser.add_argument(
-    "--local-files",
-    action="store_true",
-    help="Use local files instead of Elasticsearch (default: Elasticsearch)"
+        "--local-files",
+        action="store_true",
+        help="Use local files instead of Elasticsearch (default: Elasticsearch)"
     )
     parser.add_argument(
     "--documents",
-    type=str,
-    default="data/documents",
-    help="Path to documents directory [requires --local-files]"
+        type=str,
+        default="data/documents",
+        help="Path to documents directory [requires --local-files]"
     )
     parser.add_argument(
         "--questions",
@@ -68,14 +80,14 @@ def parse_arguments():
     parser.add_argument(
         "--top-k",
         type=int,
-        default=3,
-        help="Number of chunks to retrieve (default: 3)"
+        default=DEFAULT_TOP_K,
+        help="Number of chunks to retrieve (default: {DEFAULT_TOP_K})"
     )
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.60,
-        help="Similarity threshold (default: 0.60)"
+        default=DEFAULT_SIMILARITY_THRESHOLD,
+        help="Similarity threshold (default: {DEFAULT_SIMILARITY_THRESHOLD})"
     )
     parser.add_argument(
         "--max-questions",
@@ -96,20 +108,20 @@ def parse_arguments():
     parser.add_argument(
     "--es-host",
     type=str,
-    default="localhost",
-    help="Elasticsearch host (default: localhost)"
+    default=DEFAULT_ELASTIC_HOST,
+    help="Elasticsearch host (default: {DEFAULT_ELASTIC_HOST})"
     )
     parser.add_argument(
     "--es-port",
     type=int,
-    default=9200,
-    help="Elasticsearch port (default: 9200)"
+    default=DEFAULT_ELASTIC_PORT,
+    help="Elasticsearch port (default: {DEFAULT_ELASTIC_PORT})"
     )
     parser.add_argument(
     "--es-index",
     type=str,
-    default="psb_docs",
-    help="Elasticsearch index (default: psb_docs)"
+    default=DEFAULT_ELASTIC_INDEX,
+    help="Elasticsearch index (default: {DEFAULT_ELASTIC_INDEX})"
     )
 
     

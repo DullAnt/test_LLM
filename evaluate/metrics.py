@@ -212,15 +212,16 @@ def generate_html_report(
         .text-wrap {{
             word-wrap: break-word;
             white-space: normal;
-            line-height: 1.6;
-            font-size: 0.9em;
+            line-height: 1.8;
+            font-size: 1em;
         }}
         .answer-box {{
-            padding: 12px;
-            border-radius: 8px;
-            margin: 5px 0;
-            line-height: 1.6;
-            font-size: 0.9em;
+            padding: 20px;
+            border-radius: 12px;
+            margin: 10px 0;
+            line-height: 1.8;
+            font-size: 1em;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
         }}
         .expected-answer {{
             background: #f0fdf4;
@@ -235,34 +236,46 @@ def generate_html_report(
             font-size: 0.75em;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 6px;
+            margin-bottom: 10px;
             color: #666;
         }}
         .chunk-box {{
             background: #f3f4f6;
-            border-left: 3px solid #667eea;
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 6px;
-            font-size: 0.85em;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 0 0 15px 0;
+            border-radius: 12px;
+            font-size: 0.95em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }}
         .chunk-meta {{
-            font-size: 0.75em;
+            font-size: 0.85em;
             color: #666;
-            margin-bottom: 6px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
         }}
         .chunk-score {{
             display: inline-block;
-            padding: 2px 8px;
-            background: #667eea;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            font-size: 0.9em;
             color: white;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 0.8em;
         }}
         .chunk-source {{
             color: #7c3aed;
             font-weight: 600;
+        }}
+        .chunk-text {{
+            line-height: 1.8;
+            color: #333;
+            font-size: 1em;
+            margin-top: 10px;
+            white-space: pre-wrap;
         }}
         .source-badge {{
             display: inline-block;
@@ -294,7 +307,7 @@ def generate_html_report(
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-                }}
+        }}
         .expandable {{
             cursor: pointer;
             user-select: none;
@@ -304,12 +317,12 @@ def generate_html_report(
         }}
         .details {{
             display: none;
-            padding: 15px;
+            padding: 20px;
             background: #fafafa;
             border-top: 1px solid #e5e7eb;
         }}
         .details.open {{
-            display: block;
+            display: table-row;
         }}
         .footer {{
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -492,10 +505,10 @@ def generate_html_report(
                 <thead>
                     <tr>
                         <th style="width: 40px;">#</th>
-                        <th style="width: 20%;">Вопрос</th>
+                        <th style="width: 25%;">Вопрос</th>
                         <th style="width: 100px;">Результат</th>
                         <th style="width: 120px;">Схожесть</th>
-                        <th style="width: 35%;">Сравнение</th>
+                        <th>Сравнение</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -510,8 +523,8 @@ def generate_html_report(
         chunks = result.get('retrieved_chunks', [])
         
         question = question.replace('<', '&lt;').replace('>', '&gt;')
-        generated = generated.replace('<', '&lt;').replace('>', '&gt;')
-        expected = expected.replace('<', '&lt;').replace('>', '&gt;')
+        generated_escaped = generated.replace('<', '&lt;').replace('>', '&gt;')
+        expected_escaped = expected.replace('<', '&lt;').replace('>', '&gt;')
         
         status_class = 'status-correct' if is_correct else 'status-incorrect'
         status_text = 'Правильно' if is_correct else 'Неправильно'
@@ -533,16 +546,30 @@ def generate_html_report(
             chunk_score = chunk.get('score', 0)
             chunk_rank = chunk.get('rank', 0)
             
+            # Цвет badge в зависимости от score
+            if chunk_score >= 0.8:
+                score_color = '#10b981'
+                score_label = 'Отлично'
+            elif chunk_score >= 0.6:
+                score_color = '#f59e0b'
+                score_label = 'Хорошо'
+            else:
+                score_color = '#ef4444'
+                score_label = 'Средне'
+            
             chunks_html += f"""
                 <div class="chunk-box">
                     <div class="chunk-meta">
-                        Ранг #{chunk_rank} | 
-                        <span class="chunk-source">{chunk_source}</span> | 
-                        <span class="chunk-score" style="background: {'#10b981' if chunk_score >= 0.7 else '#f59e0b' if chunk_score >= 0.5 else '#ef4444'}">
-                            {chunk_score:.1%}
+                        <div>
+                            <strong style="color: #667eea;">Ранг #{chunk_rank}</strong>
+                            <span style="color: #666; margin: 0 10px;">|</span>
+                            <span class="chunk-source">{chunk_source}</span>
+                        </div>
+                        <span class="chunk-score" style="background: {score_color};">
+                            {chunk_score:.1%} - {score_label}
                         </span>
                     </div>
-                    <div class="text-wrap">{chunk_text[:200]}{'...' if len(chunk_text) > 200 else ''}</div>
+                    <div class="chunk-text">{chunk_text}</div>
                 </div>
             """
         
@@ -561,18 +588,50 @@ def generate_html_report(
                         <td>
                             <div class="answer-box expected-answer">
                                 <div class="answer-label">Ожидаемый ответ</div>
-                                <div class="text-wrap">{expected[:150]}{'...' if len(expected) > 150 else ''}</div>
+                                <div class="text-wrap">{expected_escaped[:200]}{'...' if len(expected_escaped) > 200 else ''}</div>
                             </div>
                             <div class="answer-box generated-answer">
-                                <div class="answer-label">Ответ системы</div>
-                                <div class="text-wrap">{generated[:150]}{'...' if len(generated) > 150 else ''}</div>
+                                <div class="answer-label">Ответ системы (клик для деталей)</div>
+                                <div class="text-wrap">{generated_escaped[:200]}{'...' if len(generated_escaped) > 200 else ''}</div>
                             </div>
                         </td>
                     </tr>
                     <tr class="details">
-                        <td colspan="5">
-                            <h4 style="margin-bottom: 15px; color: #667eea;">RAG: Найденные чанки (TOP {len(chunks)})</h4>
-                            {chunks_html if chunks_html else '<p>Чанки не найдены</p>'}
+                        <td colspan="5" style="padding: 20px; background: #fafafa;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start;">
+                                
+                                <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                                    <h4 style="margin: 0 0 20px 0; color: #667eea; font-size: 1.4em; border-bottom: 2px solid #667eea; padding-bottom: 10px;">
+                                        RAG: Найденные чанки (TOP {len(chunks)})
+                                    </h4>
+                                    <div style="display: grid; grid-template-columns: 1fr; gap: 15px; max-height: 600px; overflow-y: auto; padding-right: 10px;">
+                                        {chunks_html if chunks_html else '<p style="color: #666; text-align: center; padding: 40px;">Чанки не найдены</p>'}
+                                    </div>
+                                </div>
+                                
+                                <div>
+                            <!-- Сначала Ожидаемый ответ (зеленый) -->
+                                    <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;">
+                                        <h4 style="margin: 0 0 15px 0; color: #10b981; font-size: 1.4em; border-bottom: 2px solid #10b981; padding-bottom: 10px;">
+                                            Ожидаемый ответ
+                                        </h4>
+                                        <div style="background: #f0fdf4; padding: 20px; border-radius: 8px; border-left: 4px solid #10b981; line-height: 1.8; white-space: pre-wrap; font-size: 1em;">
+                                    {expected_escaped}
+                                        </div>
+                                    </div>
+
+                                    <!-- Потом Полный ответ системы (желтый) -->
+                                    <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+                                        <h4 style="margin: 0 0 15px 0; color: #f59e0b; font-size: 1.4em; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">
+                                            Полный ответ системы
+                                        </h4>
+                                        <div style="background: #fef3c7; padding: 20px; border-radius: 8px; border-left: 4px solid #f59e0b; line-height: 1.8; white-space: pre-wrap; font-size: 1em;">
+                                    {generated_escaped}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                            </div>
                         </td>
                     </tr>
 """
@@ -587,7 +646,7 @@ def generate_html_report(
         
         <div class="footer">
             <p style="font-size: 1.1em; font-weight: 600;">TEST_LLM - Система тестирования LLM</p>
-            <p style="margin-top: 10px; opacity: 0.9;">Оптимизировано для слабого ПК</p>
+            <p style="margin-top: 10px; opacity: 0.9;">Векторный поиск + Косинусное сходство</p>
         </div>
     </div>
 </body>

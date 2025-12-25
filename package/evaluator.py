@@ -10,12 +10,15 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 from rag.ollama_client import OllamaClient
-from rag.embeddings import EmbeddingModel
+from package.config import get_embedding_model
 from rag.retriever import DocumentRetriever
 from rag.hyde import HyDEGenerator
 from evaluate.questions import load_questions, extract_questions
 from evaluate.similarity import calculate_similarity
 from evaluate.metrics import generate_html_report
+from package.config import DEFAULT_OLLAMA_MODEL
+from package.config import get_embedding_model
+
 
 try:
     from package.ollama_detector import get_ollama_host_with_fallback
@@ -75,7 +78,7 @@ class RAGEvaluator:
         # Инициализация компонентов
         print("\n[INIT] Инициализация компонентов...")
         
-        embedding_model = EmbeddingModel()
+        embedding_model = get_embedding_model()
         print(" Embedding модель")
         
         ollama_client = OllamaClient(
@@ -97,10 +100,9 @@ class RAGEvaluator:
         
         retriever = DocumentRetriever(
             embedding_model=embedding_model,
-            top_k=self.top_k,
             es_client=es_client,
-            es_index=es_index,
-            documents=documents
+            index_name=es_index,
+            ollama_client=ollama_client
         )
         print("  Document retriever")
         
