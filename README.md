@@ -193,23 +193,35 @@ python main.py --help
 ```
 test_LLM/
 ├── data/
-│   ├── documents/          # Исходные документы
-│   ├── testsets/          # Наборы вопросов (JSONL)
-│   └── reports/           # HTML отчеты
-├── rag/
-│   ├── ollama_client.py   # Клиент для Ollama
-│   ├── retriever.py       # Векторный поиск
-│   └── hyde.py            # HyDE генератор
+│   ├── documents/              # Исходные документы
+│   ├── testsets/              # Наборы вопросов (JSONL)
+│   └── reports/               # HTML отчеты
 ├── evaluate/
-│   ├── metrics.py         # Метрики и отчеты
-│   └── similarity.py      # Вычисление схожести
+│   ├── __init__.py
+│   ├── metrics.py             # Генерация метрик и HTML отчетов
+│   ├── questions.py           # Извлечение вопросов из документов
+│   └── similarity.py          # Вычисление схожести ответов
 ├── package/
-│   ├── config.py          # Конфигурация
-│   ├── evaluator.py       # Основной evaluator
-│   └── CLI.py             # Парсер аргументов
-├── load_to_elasticsearch.py  # Загрузка в ES
+│   ├── __init__.py
+│   ├── CLI.py                 # Парсер аргументов командной строки
+│   ├── config.py              # Конфигурация и embedding модели
+│   ├── elastic.py             # Подключение к Elasticsearch
+│   ├── evaluator.py           # Основной evaluator для тестирования
+│   ├── loader.py              # Загрузка документов
+│   └── ollama_detector.py     # Определение доступности Ollama
+├── rag/
+│   ├── __init__.py
+│   ├── embeddings.py          # Заглушка, при ненадобности можно снести
+│   ├── hyde.py                # HyDE генератор гипотез
+│   ├── ollama_client.py       # Клиент для Ollama LLM
+│   ├── prompts.py             # Системные промпты
+│   └── retriever.py           # Векторный поиск в Elasticsearch
+├── .env.example               # Пример конфигурации
+├── docker-compose.yaml        # Docker конфигурация (опционально)
+├── load_to_elasticsearch.py  # Загрузка документов в ES
 ├── main.py                    # Точка входа
-└── requirements.txt
+├── README.md                  # Документация
+└── requirements.txt           # Python зависимости
 ```
 
 ## Смена embedding модели
