@@ -4,7 +4,7 @@
 
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-from package.config import get_embedding_model
+from rag.embeddings import get_embedding_model
 
 
 def calculate_similarity(text1: str, text2: str) -> float:

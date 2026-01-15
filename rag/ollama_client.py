@@ -2,294 +2,228 @@
 Ollama Client для взаимодействия с локальным LLM
 """
 
-import requests
-import json
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict
+
+import ollama
+from ollama import Client
+from langchain_ollama import ChatOllama
 
 
 class OllamaClient:
-    """Клиент для работы с Ollama API"""
-    
+    """Клиент для работы с Ollama (без requests)"""
+
     def __init__(self, host: str = "http://localhost:11434", model: str = "llama3", timeout: int = 300):
-        """
-        Args:
-            host: URL Ollama сервера
-            model: Название модели
-            timeout: Таймаут запроса в секундах
-        """
-        self.host = host.rstrip('/')
+        self.host = host.rstrip("/")
         self.model = model
         self.timeout = timeout
-        self._ollama_version = None
-        
+
         # Определить источник по порту
         self.source = self._detect_source()
-        
-        # Проверка подключения
+
+        # Официальный ollama python client для диагностики (без requests)
+        # В docs: Client(host=...), list(), chat(), generate() :contentReference[oaicite:4]{index=4}
+        self.client = Client(host=self.host, timeout=5.0)
+
+        # Проверка подключения (без requests)
         if self.check_connection():
-            print(f"[OLLAMA] ✅ Подключено ({self.model})")
+            print(f"[OLLAMA] Подключено ({self.model})")
             print(f"         Источник: {self.source}")
-            
-            # Проверить доступность модели
+
+            # Проверить доступность модели (без requests)
             if not self._check_model_available():
-                print(f"[WARNING] ⚠️ Модель {self.model} не найдена!")
+                print(f"[WARNING] Модель {self.model} не найдена!")
                 self._print_available_models()
+
+            # ChatOllama для генерации
+            # validate_model_on_init есть в langchain-ollama :contentReference[oaicite:5]{index=5}
+            self.llm = self._init_langchain_llm()
+
         else:
-            print(f"[ERROR] ❌ Не удалось подключиться к Ollama: {self.host}")
+            self.llm = None
+            print(f"[ERROR] Не удалось подключиться к Ollama: {self.host}")
             self._print_connection_help()
-    
+
+    def _init_langchain_llm(self) -> ChatOllama:
+        """Инициализация ChatOllama с фолбэком на случай несовпадения версии."""
+        try:
+            return ChatOllama(
+                model=self.model,
+                base_url=self.host,
+                validate_model_on_init=True,
+                temperature=0.1,
+                top_p=0.9,
+                top_k=40,
+                num_predict=200,
+                repeat_penalty=1.1,
+                sync_client_kwargs={"timeout": self.timeout},
+            )
+        except TypeError:
+            # Фолбэк: если вдруг base_url/sync_client_kwargs не поддерживаются в твоей версии
+            return ChatOllama(
+                model=self.model,
+                validate_model_on_init=True,
+                temperature=0.1,
+                top_p=0.9,
+                top_k=40,
+                num_predict=200,
+                repeat_penalty=1.1,
+            )
+
     def _detect_source(self) -> str:
         """Определить источник Ollama по порту"""
         if ":11434" in self.host or self.host.endswith("11434"):
             return "Локальная Ollama (порт 11434)"
         elif ":11435" in self.host or self.host.endswith("11435"):
             return "Docker Ollama (порт 11435)"
-        else:
-            return f"Кастомный сервер ({self.host})"
-    
+        return f"Кастомный сервер ({self.host})"
+
+    # =========================
+    # Диагностика (без requests)
+    # =========================
+
     def check_connection(self) -> bool:
-        """Проверка подключения к Ollama"""
+        """Проверка подключения к Ollama (через ollama sdk)"""
         try:
-            response = requests.get(f"{self.host}/api/tags", timeout=5)
-            if response.status_code == 200:
-                # Получить версию Ollama
-                try:
-                    version_response = requests.get(f"{self.host}/api/version", timeout=2)
-                    if version_response.status_code == 200:
-                        self._ollama_version = version_response.json().get('version', 'unknown')
-                except:
-                    pass
-                return True
+            _ = self.client.list()  # docs: ollama.list()/client.list() :contentReference[oaicite:6]{index=6}
+            return True
+        except Exception:
             return False
-        except requests.exceptions.ConnectionError:
-            return False
-        except requests.exceptions.Timeout:
-            print(f"[ERROR] Таймаут подключения к Ollama (>{5}s)")
-            return False
-        except Exception as e:
-            print(f"[ERROR] Ошибка подключения к Ollama: {e}")
-            return False
-    
+
     def _check_model_available(self) -> bool:
-        """Проверка доступности модели"""
+        """Проверка доступности модели (через ollama sdk)"""
         try:
-            response = requests.get(f"{self.host}/api/tags", timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                models = data.get('models', [])
-                return any(m.get('name', '').startswith(self.model) for m in models)
+            data = self.client.list()
+            # у разных версий структура чуть отличается — безопасно вытаскиваем
+            models = getattr(data, "models", None) or data.get("models", [])
+            names = []
+            for m in models:
+                # m может быть dict или объект
+                name = getattr(m, "model", None) or getattr(m, "name", None) or (m.get("model") if isinstance(m, dict) else None) or (m.get("name") if isinstance(m, dict) else None)
+                if name:
+                    names.append(name)
+            return any(n.startswith(self.model) for n in names)
+        except Exception:
             return False
-        except:
-            return False
-    
+
     def _print_available_models(self):
-        """Вывод списка доступных моделей"""
+        """Вывод списка моделей (через ollama sdk)"""
         try:
-            response = requests.get(f"{self.host}/api/tags", timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                models = data.get('models', [])
-                
-                if models:
-                    print("\n[INFO] 📋 Доступные модели:")
-                    for m in models:
-                        name = m.get('name', 'unknown')
-                        size_gb = m.get('size', 0) / (1024**3)
-                        print(f"       - {name} ({size_gb:.1f}GB)")
-                    
-                    print(f"\n[TIP] 💡 Загрузите нужную модель:")
-                    if ":11435" in self.host:
-                        print(f"       docker exec test_llm_ollama ollama pull {self.model}")
-                    else:
-                        print(f"       ollama pull {self.model}")
-                else:
-                    print("\n[WARNING] Нет установленных моделей!")
-                    self._print_install_model_help()
-        except:
+            data = self.client.list()
+            models = getattr(data, "models", None) or data.get("models", [])
+
+            if not models:
+                print("\n[WARNING] Нет установленных моделей!")
+                self._print_install_model_help()
+                return
+
+            print("\n[INFO] Доступные модели:")
+            for m in models:
+                name = getattr(m, "model", None) or getattr(m, "name", None) or (m.get("model") if isinstance(m, dict) else None) or (m.get("name") if isinstance(m, dict) else "unknown")
+                size = getattr(m, "size", None) or (m.get("size") if isinstance(m, dict) else 0) or 0
+                size_gb = float(size) / (1024**3) if size else 0.0
+                print(f"       - {name} ({size_gb:.1f}GB)")
+
+            print("\n[TIP] Загрузите нужную модель:")
+            if ":11435" in self.host:
+                print(f"       docker exec test_llm_ollama ollama pull {self.model}")
+            else:
+                print(f"       ollama pull {self.model}")
+
+        except Exception:
             pass
-    
-    def _print_install_model_help(self):
-        """Подсказка по установке модели"""
-        print("\n[TIP] 💡 Как установить модель:")
-        if ":11435" in self.host:
-            # Docker Ollama
-            print("       1. Интерактивно: python setup_ollama.py")
-            print(f"       2. Вручную: docker exec test_llm_ollama ollama pull {self.model}")
-        else:
-            # Локальная Ollama
-            print(f"       ollama pull {self.model}")
-            print("       Рекомендуемые: qwen2.5:7b, gemma2:9b, gemma2:2b")
-    
-    def _print_connection_help(self):
-        """Подсказка при ошибке подключения"""
-        print("\n[TIP] 💡 Как исправить:")
-        
-        if ":11434" in self.host:
-            # Локальная Ollama
-            print("       1. Проверьте что Ollama запущена:")
-            print("          ollama list")
-            print("       2. Переустановите: https://ollama.com/download")
-            print("       3. Или используйте Docker:")
-            print("          python main.py --ollama-host http://localhost:11435")
-        
-        elif ":11435" in self.host:
-            # Docker Ollama
-            print("       1. Проверьте что контейнер запущен:")
-            print("          docker ps | grep ollama")
-            print("       2. Запустите контейнер:")
-            print("          docker-compose up -d ollama")
-            print("       3. Или используйте локальную Ollama:")
-            print("          python main.py --ollama-host http://localhost:11434")
-        else:
-            print(f"       Проверьте доступность сервера: {self.host}")
-    
+
     def get_info(self) -> Dict:
-        """Получить информацию об Ollama"""
+        """Инфо об Ollama (без requests)"""
         info = {
             "host": self.host,
             "model": self.model,
             "source": self.source,
             "connected": self.check_connection(),
-            "version": self._ollama_version
         }
-        
         try:
-            response = requests.get(f"{self.host}/api/tags", timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                info["available_models"] = [m.get('name') for m in data.get('models', [])]
-        except:
+            data = self.client.list()
+            models = getattr(data, "models", None) or data.get("models", [])
+            names = []
+            for m in models:
+                name = getattr(m, "model", None) or getattr(m, "name", None) or (m.get("model") if isinstance(m, dict) else None) or (m.get("name") if isinstance(m, dict) else None)
+                if name:
+                    names.append(name)
+            info["available_models"] = names
+        except Exception:
             info["available_models"] = []
-        
         return info
-    
+
+    # =========================
+    # Генерация (ChatOllama)
+    # =========================
+
     def generate(self, question: str, context: List[str]) -> str:
-        """
-        Генерация ответа на вопрос с учетом контекста
-        
-        Args:
-            question: Вопрос пользователя
-            context: Список релевантных текстов
-            
-        Returns:
-            Сгенерированный ответ
-        """
-        
-        # Формирование улучшенного промпта
-        if context:
-            context_text = "\n\n".join(context)
-            prompt = f"""Ты эксперт-консультант банка. Ответь на вопрос клиента на основе документации.
+        """Генерация ответа на вопрос с учетом контекста (через ChatOllama)"""
+        if self.llm is None:
+            return "Ошибка: Ollama недоступна или модель не инициализирована"
 
-ПРАВИЛА:
-1. Используй ТОЛЬКО информацию из контекста ниже
-2. Отвечай кратко и точно (1-3 предложения)
-3. Если нужен расчет - посчитай и дай конкретное число
-4. Если в контексте есть точная формула или проценты - используй их
-5. НЕ говори "информация отсутствует" если она есть в контексте
-6. Не используй markdown разметку (жирный, списки и т.д.)
-7. Копируй точные числа и формулы из контекста
+        system_text = (
+            "Ты эксперт-консультант банка. Отвечай строго по правилам:\n"
+            "1) Используй ТОЛЬКО информацию из контекста ниже.\n"
+            "2) Ответ 1–3 предложения, без markdown.\n"
+            "3) Если в контексте есть точные числа/проценты/формулы — копируй их точно.\n"
+            "4) Если нужен расчёт — посчитай и дай итог.\n"
+        )
 
-ПРИМЕРЫ:
+        context_text = "\n\n".join(context) if context else ""
+        human_text = (
+            "КОНТЕКСТ:\n"
+            f"{context_text}\n\n"
+            "ВОПРОС:\n"
+            f"{question}\n\n"
+            "ОТВЕТ:"
+        )
 
-Вопрос: Посчитай комиссию если я превышу лимит на 20000
-Контекст: "50 000₽ - бесплатно (0%) 20 000₽ - комиссия 0,8% = 160₽"
-Ответ: 50 000₽ - бесплатно (0%), 20 000₽ - комиссия 0,8% = 160₽. Итого комиссия: 160₽
-
-Вопрос: Могу ли я снять без комиссии в ВТБ?
-Контекст: "Да, 0% комиссии для карт Мир в банкоматах ВТБ"
-Ответ: Да, 0% комиссии для карт платежной системы Мир в банкоматах ВТБ.
-
-Вопрос: В чем разница между картами?
-Контекст: "Основная карта выпускается на владельца счета. Дополнительная карта выпускается на другое лицо."
-Ответ: Основная карта выпускается на владельца счета, а Дополнительная карта выпускается на другое лицо.
-
-КОНТЕКСТ:
-{context_text}
-
-ВОПРОС: {question}
-
-ОТВЕТ:"""
-        else:
-            prompt = f"""Ответь на вопрос на основе твоих знаний о банковских продуктах.
-
-Вопрос: {question}
-
-Ответ:"""
-        
         try:
-            # Запрос к Ollama API
-            response = requests.post(
-                f"{self.host}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False,
-                    "options": {
-                        "temperature": 0.1,  # Низкая температура для точности
-                        "top_p": 0.9,
-                        "top_k": 40,
-                        "num_predict": 200,  # Ограничение длины ответа
-                        "repeat_penalty": 1.1,
-                    }
-                },
-                timeout=self.timeout
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                answer = result.get('response', '').strip()
-                
-                # Очистка ответа от markdown
-                answer = self._clean_response(answer)
-                
-                return answer
-            
-            elif response.status_code == 404:
-                error_msg = f"Модель {self.model} не найдена"
-                print(f"[ERROR] {error_msg}")
-                self._print_available_models()
-                return f"Ошибка: {error_msg}"
-            
-            else:
-                print(f"[ERROR] Ollama вернул код {response.status_code}")
-                try:
-                    error_data = response.json()
-                    error_detail = error_data.get('error', 'Unknown error')
-                    print(f"[ERROR] Детали: {error_detail}")
-                except:
-                    pass
-                return "Ошибка генерации ответа"
-                
-        except requests.exceptions.Timeout:
-            print(f"[ERROR] Таймаут запроса к Ollama (>{self.timeout}s)")
-            print(f"[TIP] Увеличьте таймаут: --timeout 900")
-            return "Таймаут генерации ответа"
-        
-        except requests.exceptions.ConnectionError:
-            print(f"[ERROR] Потеряно соединение с Ollama")
-            self._print_connection_help()
-            return "Ошибка соединения с Ollama"
-        
+            msg = self.llm.invoke([("system", system_text), ("human", human_text)])
+            answer = (msg.content or "").strip()
+            return self._clean_response(answer)
         except Exception as e:
-            print(f"[ERROR] Ошибка при генерации: {e}")
+            print(f"[ERROR] Ошибка при генерации через ChatOllama: {e}")
             return "Ошибка генерации ответа"
-    
+
+    # =========================
+    # Helpers
+    # =========================
+
+    def _print_install_model_help(self):
+        print("\n[TIP]  Как установить модель:")
+        if ":11435" in self.host:
+            print("       1. Интерактивно: python setup_ollama.py")
+            print(f"       2. Вручную: docker exec test_llm_ollama ollama pull {self.model}")
+        else:
+            print(f"       ollama pull {self.model}")
+            print("       Рекомендуемые: qwen2.5:7b, gemma2:9b, gemma2:2b")
+
+    def _print_connection_help(self):
+        print("\n[TIP] Как исправить:")
+        if ":11434" in self.host:
+            print("       1) Проверьте что Ollama запущена: ollama list")
+            print("       2) Переустановите: https://ollama.com/download")
+            print("       3) Или используйте Docker: python main.py --ollama-host http://localhost:11435")
+        elif ":11435" in self.host:
+            print("       1) Проверьте контейнер: docker ps | grep ollama")
+            print("       2) Запустите: docker-compose up -d ollama")
+            print("       3) Или используйте локальную: python main.py --ollama-host http://localhost:11434")
+        else:
+            print(f"       Проверьте доступность сервера: {self.host}")
+
     def _clean_response(self, text: str) -> str:
-        """Очистка ответа от markdown разметки"""
-        # Убрать markdown
-        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **жирный**
-        text = re.sub(r'\*([^*]+)\*', r'\1', text)      # *курсив*
-        text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)  # заголовки
-        text = re.sub(r'^\d+\.\s+', '', text, flags=re.MULTILINE)   # списки 1. 2. 3.
-        text = re.sub(r'^[-•]\s+', '', text, flags=re.MULTILINE)    # буллеты - и •
-        
-        # Убрать префиксы если LLM их повторил
-        text = re.sub(r'^(Ответ:|ОТВЕТ:)\s*', '', text, flags=re.IGNORECASE)
-        text = re.sub(r'^(Краткий ответ:|КРАТКИЙ ОТВЕТ:)\s*', '', text, flags=re.IGNORECASE)
-        
+        text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+        text = re.sub(r"\*([^*]+)\*", r"\1", text)
+        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^\d+\.\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^[-•]\s+", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^(Ответ:|ОТВЕТ:)\s*", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"^(Краткий ответ:|КРАТКИЙ ОТВЕТ:)\s*", "", text, flags=re.IGNORECASE)
         return text.strip()
-    
+
     def __repr__(self):
-        status = "✅ Connected" if self.check_connection() else "❌ Disconnected"
+        status = " Connected" if self.check_connection() else " Disconnected"
         return f"OllamaClient(host='{self.host}', model='{self.model}', status={status})"

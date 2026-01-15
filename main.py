@@ -1,58 +1,37 @@
-"""
-Основной Main для запуска тестирования
-"""
+# ============================================
+# main.py
+# ============================================
 
 from package.CLI import parse_arguments
-from package.loader import load_documents_local, load_documents_elasticsearch, setup_directories
+from package.loader import load_documents_local, ensure_elasticsearch_ready, setup_directories
 from package.evaluator import RAGEvaluator
+from package.config import Config
 
 
 def main():
-    """Главная функция"""
     print("=" * 80)
     print("TEST_LLM - СИСТЕМА ТЕСТИРОВАНИЯ RAG")
     print("=" * 80)
-    
-    # Парсинг аргументов
+
     args = parse_arguments()
-    
-    # Вывод конфигурации
-    print(f"\n[CONFIG] Конфигурация:")
-    print(f"  Модель: {args.model}")
-    print(f"  HyDE: {'Включен' if args.hyde else 'Выключен'}")
-    print(f"  TOP_K: {args.top_k}")
-    print(f"  Порог: {args.threshold:.0%}")
-    print(f"  Макс. вопросов: {args.max_questions}")
-    if args.local_files:
-        print(f"  Источник: Локальные файлы ({args.documents})")
-    else:
-        print(f"  Источник: Elasticsearch ({args.es_host}:{args.es_port}/{args.es_index})")
-    
-    # Создание директорий
     setup_directories()
-    
-    # Загрузка документов
-    documents = None
-    es_client = None
-    
+
+    # Определяем режим работы
     if args.local_files:
-        # Режим локальных файлов (дополнительная опция)
+        print("\n[MODE] Local Files Mode")
         documents = load_documents_local(args.documents)
         if not documents:
-            print("[ERROR] Не найдено документов")
-            print("[TIP] Положите документы в data/documents/")
+            print("[ERROR] Нет документов для загрузки")
             return
     else:
-        # Режим Elasticsearch (по умолчанию)
-        documents, es_client = load_documents_elasticsearch(
-            es_host=args.es_host,
-            es_port=args.es_port,
-            es_index=args.es_index
-        )
-        if documents is None:
+        print("\n[MODE] Elasticsearch Mode (default)")
+        ok = ensure_elasticsearch_ready("localhost", 9200, args.es_index)
+        if not ok:
+            print("[ERROR] Elasticsearch недоступен")
             return
-    
-    # Создание evaluator
+        documents = []  # В ES-режиме документы в память не грузим
+
+    # Создаем evaluator
     evaluator = RAGEvaluator(
         model=args.model,
         ollama_host=args.ollama_host,
@@ -60,19 +39,18 @@ def main():
         top_k=args.top_k,
         threshold=args.threshold,
         use_hyde=args.hyde,
-        random_seed=args.seed
+        random_seed=args.seed,
     )
-    
-    # Запуск оценки
+
+    # Запускаем оценку
     result = evaluator.run_evaluation(
         documents=documents,
         questions_path=args.questions,
         max_questions=args.max_questions,
         extract_qa=args.extract_qa,
-        es_client=es_client,
-        es_index=args.es_index if not args.local_files else None
+        es_index=args.es_index,
     )
-    
+
     if result:
         print("\nТестирование успешно завершено!")
     else:
