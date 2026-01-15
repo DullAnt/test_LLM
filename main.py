@@ -16,6 +16,18 @@ def main():
     args = parse_arguments()
     setup_directories()
 
+    if args.head:
+        from package import head
+        print("\n[HEAD] Используются параметры из head.py:")
+        print(f"  top_k: {head.top_k}")
+        print(f"  need_hyde: {head.need_hyde}")
+        print(f"  model: {head.model}")
+        print(f"  embeddings: {head.embeddings}")
+        
+        # Переопределяем параметры из head
+        args.top_k = head.top_k
+        args.hyde = head.need_hyde
+        args.model = head.model
     # Определяем режим работы
     if args.local_files:
         print("\n[MODE] Local Files Mode")
@@ -50,6 +62,7 @@ def main():
         extract_qa=args.extract_qa,
         es_index=args.es_index,
     )
+
 
     if result:
         print("\nТестирование успешно завершено!")

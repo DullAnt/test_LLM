@@ -45,6 +45,11 @@ def parse_arguments():
         default=DEFAULT_OLLAMA_TIMEOUT,
         help=f"Timeout in seconds (default: {DEFAULT_OLLAMA_TIMEOUT})"
     )
+    parser.add_argument(
+        "--head",
+        action="store_true",
+        help="Use parameters from head.py instead of CLI/Config defaults"
+    )
     
     # Источник данных
     parser.add_argument(
