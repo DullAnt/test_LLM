@@ -1,6 +1,6 @@
 from typing import List, Dict
 from pathlib import Path
-from package.elastic import ElasticsearchClient
+from connections.elastic import ElasticsearchClient
 
 
 def setup_directories():
@@ -29,8 +29,20 @@ def load_documents_local(documents_path: str = "data/documents") -> List[Dict]:
 
 
 def ensure_elasticsearch_ready(es_host: str, es_port: int, es_index: str) -> bool:
+    """
+    Проверка готовности Elasticsearch
+    
+    Args:
+        es_host: хост (например, "localhost")
+        es_port: порт (например, 9200)
+        es_index: название индекса
+    """
     try:
-        es_client = ElasticsearchClient(host=es_host, port=es_port, index_name=es_index)
+        # Формируем URL из host и port
+        es_url = f"http://{es_host}:{es_port}"
+        
+        # Создаем клиент с правильными параметрами
+        es_client = ElasticsearchClient(url=es_url, index_name=es_index)
 
         if not es_client.ping():
             print("[ERROR] Elasticsearch недоступен")

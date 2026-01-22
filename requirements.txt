@@ -1,7 +1,17 @@
+# Core ML Libraries
+sentence-transformers>=2.2.0    # Embedding модели (EmbeddingModel)
+numpy>=1.24.0,<2.0.0           # Важно! <2.0 для совместимости с sentence-transformers
+scikit-learn>=1.3.0            # Cosine similarity (calculate_similarity)
 
-sentence-transformers>=2.2.0   # Embeddings
-numpy>=1.24.0,<2.0.0          # <2.0 важно!
-scikit-learn>=1.3.0            # Similarity
-elasticsearch==8.12.0          # База данных
-requests>=2.31.0               # Ollama API
-python-dotenv>=1.0.0           # .env файлы
+# LangChain Ecosystem
+langchain-core>=0.1.0          # Базовые интерфейсы (Embeddings, Document)
+langchain-elasticsearch>=0.1.0  # ElasticsearchStore для векторного поиска
+langchain-ollama>=0.1.0        # ChatOllama для генерации
+
+# Database & APIs
+elasticsearch==8.12.0          # Elasticsearch клиент (важна версия!)
+ollama>=0.1.0                  # Официальный Ollama SDK (для детекта и info)
+
+# Data Processing
+pydantic>=2.0.0                # Валидация данных (BaseModel в head.py)
+python-dotenv>=1.0.0           # Загрузка .env файлов (Config)

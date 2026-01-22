@@ -610,7 +610,6 @@ def generate_html_report(
                                 </div>
                                 
                                 <div>
-                            <!-- Сначала Ожидаемый ответ (зеленый) -->
                                     <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-bottom: 20px;">
                                         <h4 style="margin: 0 0 15px 0; color: #10b981; font-size: 1.4em; border-bottom: 2px solid #10b981; padding-bottom: 10px;">
                                             Ожидаемый ответ
@@ -620,7 +619,6 @@ def generate_html_report(
                                         </div>
                                     </div>
 
-                                    <!-- Потом Полный ответ системы (желтый) -->
                                     <div style="background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
                                         <h4 style="margin: 0 0 15px 0; color: #f59e0b; font-size: 1.4em; border-bottom: 2px solid #f59e0b; padding-bottom: 10px;">
                                             Полный ответ системы

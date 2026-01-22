@@ -2,9 +2,10 @@ from typing import List, Dict, Optional
 from langchain_elasticsearch import ElasticsearchStore
 from langchain_core.documents import Document
 
-from package.config import DEFAULT_TOP_K, Config
-from rag.embeddings import EmbeddingModel
-from rag.ollama_client import OllamaClient
+from connections.config import DEFAULT_TOP_K, Config
+from connections.elastic import ElasticsearchClient
+from llm.embeddings import EmbeddingModel
+from llm.ollama_client import OllamaClient
 
 
 class DocumentRetriever:
@@ -31,16 +32,16 @@ class DocumentRetriever:
 
         self.store: Optional[ElasticsearchStore] = None
         if es_url:
-            self.store = ElasticsearchStore(
-                es_url=es_url,
-                index_name=index_name,
-                embedding=embedding_model,
-                es_user=es_user,
-                es_password=es_password,
-                es_api_key=es_api_key,
-                query_field=text_field,
-                vector_query_field=vector_field,
+            # Создаем ES клиент
+            es_client = ElasticsearchClient(url=es_url, index_name=index_name)
+            
+            # Получаем langchain store
+            self.store = es_client.get_langchain_store(
+                embedding_model=embedding_model,
+                text_field=text_field,
+                vector_field=vector_field,
             )
+
 
     def retrieve_with_scores(
         self,

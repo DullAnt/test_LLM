@@ -2,10 +2,10 @@
 # main.py
 # ============================================
 
-from package.CLI import parse_arguments
-from package.loader import load_documents_local, ensure_elasticsearch_ready, setup_directories
-from package.evaluator import RAGEvaluator
-from package.config import Config
+from llm.CLI import parse_arguments
+from load.loader import load_documents_local, ensure_elasticsearch_ready, setup_directories
+from evaluate.evaluator import RAGEvaluator
+from connections.config import Config
 
 
 def main():

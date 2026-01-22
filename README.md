@@ -1,397 +1,320 @@
 # TEST_LLM - Система тестирования RAG
 
-## Требования
+Продвинутая RAG (Retrieval-Augmented Generation) система для работы с документами банка ПСБ с поддержкой векторного поиска, HyDE и автоматической оценки качества.
+
+## Содержание
+
+- [Что за проект](#что-за-проект)
+- [Структура проекта](#структура-проекта)
+- [Как запустить](#как-запустить)
+- [Метрики качества](#метрики-качества)
+
+---
+
+## Что за проект
+
+**TEST_LLM** - это комплексная система для тестирования и оценки качества RAG (Retrieval-Augmented Generation) систем. Основные возможности:
+
+### Ключевые фичи
+
+-**Векторный поиск** через Elasticsearch с поддержкой cosine similarity
+-**LLM генерация** через Ollama (Gemma2, Llama3, Qwen и др.)
+-**HyDE** (Hypothetical Document Embeddings) для улучшения поиска
+-**Автоматическая оценка качества** с красивыми HTML отчетами
+-**Гибкая конфигурация** через .env файлы
+-**Docker-ready** с docker-compose для быстрого старта
+
+### Технологический стек
+
+- **Embeddings**: Sentence-Transformers (multilingual-e5-large)
+- **Vector DB**: Elasticsearch 8.12
+- **LLM**: Ollama (локально или Docker)
+- **Framework**: LangChain + Python 3.10+
+- **Evaluation**: Cosine similarity для оценки ответов
+
+---
+
+##  Структура проекта
+```
+TEST_LLM/
+├── connections/              # 1 ПОДКЛЮЧЕНИЯ
+│   ├── __init__.py
+│   ├── config.py            # Конфигурация (Config)
+|   ├── configuration             # Конфигурация (.env файл)
+│   └── elastic.py           # Elasticsearch клиент
+│
+├── loader/                   # 2 ЗАГРУЗКА ДАННЫХ
+│   ├── __init__.py
+│   ├── loader.py            # Загрузка документов
+│   └── questions.py         # Загрузка/извлечение вопросов
+│
+├── llm/                      # 3 LLM СИСТЕМА
+│   ├── __init__.py
+│   ├── ollama_client.py     # Ollama клиент
+│   ├── ollama_detector.py   # Автодетект Ollama
+│   ├── embeddings.py        # Embedding модели
+│   ├── retriever.py         # Векторный поиск
+│   ├── hyde.py              # HyDE генерация
+│   ├── prompts.py           # Системные промпты
+│   ├── head.py              # Быстрый тестовый интерфейс
+│   └── cli.py               # CLI аргументы
+│
+├── evaluation/               # 🔧 ОЦЕНКА КАЧЕСТВА
+│   ├── __init__.py
+│   ├── evaluator.py         # Главный evaluator
+│   ├── metrics.py           # HTML отчеты
+│   └── similarity.py        # Сравнение сгенерированного и ожидаемого ответов
+│
+├── data/                     # Данные
+│   ├── documents/           # Исходные документы (.txt, .md)
+│   ├── reports/             # HTML отчеты
+│   └── testsets/            # Наборы вопросов (.jsonl)
+│
+├── main.py                   # Тестирование
+├── testrag.py                # Быстрый тест (один вопрос)
+├── load_to_elasticsearch.py  # Загрузка документов в ES
+├── docker-compose.yaml       # Docker окружение
+├── requirements.txt          # Зависимости
+└── README.md                 # документация
+```
+
+### Основные модули
+
+#### connections/ - Подключения
+- **config.py** - Единая конфигурация всей системы
+- **elastic.py** - Клиент для Elasticsearch с векторным поиском
+
+#### loader/ - Загрузка данных
+- **loader.py** - Загрузка документов из файлов или ES
+- **questions.py** - Работа с вопросами (загрузка, извлечение, сохранение)
+
+#### llm/ - LLM система
+- **ollama_client.py** - Основной клиент для Ollama
+- **embeddings.py** - Sentence-transformers модели
+- **retriever.py** - Векторный поиск в Elasticsearch
+- **hyde.py** - HyDE для улучшения поиска
+- **head.py** - Упрощенный интерфейс для быстрого тестирования
+
+#### evaluation/ - Оценка
+- **evaluator.py** - Автоматическое тестирование на наборах вопросов
+- **metrics.py** - Генерация HTML отчетов с аналитикой
+- **similarity.py** - Вычисление схожести ответов
+
+---
+
+## Как запустить
+
+### Предварительные требования
 
 - Python 3.10+
-- Elasticsearch 8.x
-- Ollama (для LLM)
-- Windows 10/11
+- Docker & Docker Compose
+- 8GB+ RAM (для Elasticsearch + Ollama)
 
-## Установка
+### Шаг 1: Клонирование и установка
+```bash
+# Клонировать репозиторий
+git clone <your-repo>
+cd TEST_LLM
 
-### 1. Клонирование репозитория
 
-```
-git clone https://github.com/your-repo/test_llm.git
-```
-
-```
-cd test_llm
-```
-
-### 2. Создание виртуального окружения
-
-```
-python -m venv venv
-```
-
-```
-venv\Scripts\activate
-```
-
-### 3. Установка зависимостей
-
-```
+# Установить зависимости
 pip install -r requirements.txt
 ```
 
-### 4. Установка и запуск Elasticsearch
+### Шаг 2: Запуск инфраструктуры
+```bash
+# Запустить Elasticsearch + Ollama
+docker-compose up -d
 
-Скачайте Elasticsearch 8.x с официального сайта:
-
-https://www.elastic.co/downloads/elasticsearch
-
-Распакуйте архив и запустите:
-
-```
-cd elasticsearch-8.x.x\bin
+# Проверить статус
+docker ps
 ```
 
-```
-elasticsearch.bat
-```
+### Шаг 3: Настройка конфигурации
 
-Проверьте что Elasticsearch запущен:
-
-```
-curl http://localhost:9200
-```
-
-### 5. Установка и запуск Ollama
-
-Скачайте Ollama с официального сайта:
-
-https://ollama.com/download
-
-Установите и запустите приложение.
-
-Загрузите LLM модель:
-
-```
-ollama pull gemma2:2b
-```
-
-Проверьте что Ollama запущен:
-
-```
-ollama list
-```
-
-## Настройка
-
-### Файл .env
-
-Создайте файл `.env` в корне проекта:
-
-```
-EMBEDDING_MODEL=intfloat/multilingual-e5-large
+Отредактируйте файл `configuration`:
+```env
+# Ollama Configuration
 OLLAMA_MODEL=gemma2:2b
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_TIMEOUT=600
+
+# Elasticsearch Configuration
 ELASTIC_HOST=localhost
 ELASTIC_PORT=9200
 ELASTIC_INDEX=psb_docs
-SIMILARITY_THRESHOLD=0.60
-TOP_K=5
-```
 
-### Добавление документов
-
-Поместите ваши документы (`.txt`, `.md`) в папку:
-
-```
-data/documents/
-```
-
-Поддерживаемые форматы: TXT, Markdown.
-
-## Загрузка данных в Elasticsearch
-
-### Создание индекса и загрузка векторов
-
-```
-python load_to_elasticsearch.py
-```
-
-Скрипт автоматически:
-- Определит размерность embedding модели
-- Создаст индекс с правильным mapping
-- Разобьет документы на chunks
-- Вычислит вектора для каждого chunk
-- Загрузит в Elasticsearch
-
-Проверка загрузки:
-
-```
-curl http://localhost:9200/psb_docs/_count
-```
-
-```
-curl http://localhost:9200/psb_docs/_search?size=1
-```
-
-## Использование
-
-### Базовый запуск
-
-```
-python main.py
-```
-
-### Запуск с параметрами
-
-Тестирование на 10 вопросах:
-
-```
-python main.py --max-questions 10
-```
-
-С включенным HyDE:
-
-```
-python main.py --hyde
-```
-
-Без HyDE:
-
-```
-python main.py --no-hyde
-```
-
-Указать TOP-K для поиска:
-
-```
-python main.py --top-k 3
-```
-
-Использовать другую модель Ollama:
-
-```
-python main.py --ollama-model qwen2.5:7b
-```
-
-Увеличить таймаут для больших моделей:
-
-```
-python main.py --timeout 900
-```
-
-Использовать готовый набор вопросов:
-
-```
-python main.py --testset data/testsets/questions.jsonl
-```
-
-### Все параметры
-
-```
-python main.py --help
-```
-
-## Структура проекта
-
-```
-test_LLM/
-├── data/
-│   ├── documents/              # Исходные документы
-│   ├── testsets/              # Наборы вопросов (JSONL)
-│   └── reports/               # HTML отчеты
-├── evaluate/
-│   ├── __init__.py
-│   ├── metrics.py             # Генерация метрик и HTML отчетов
-│   ├── questions.py           # Извлечение вопросов из документов
-│   └── similarity.py          # Вычисление схожести ответов
-├── package/
-│   ├── __init__.py
-│   ├── CLI.py                 # Парсер аргументов командной строки
-│   ├── config.py              # Конфигурация и embedding модели
-│   ├── elastic.py             # Подключение к Elasticsearch
-│   ├── evaluator.py           # Основной evaluator для тестирования
-│   ├── loader.py              # Загрузка документов
-│   └── ollama_detector.py     # Определение доступности Ollama
-├── rag/
-│   ├── __init__.py
-│   ├── embeddings.py          # Заглушка, при ненадобности можно снести
-│   ├── hyde.py                # HyDE генератор гипотез
-│   ├── ollama_client.py       # Клиент для Ollama LLM
-│   ├── prompts.py             # Системные промпты
-│   └── retriever.py           # Векторный поиск в Elasticsearch
-├── .env.example               # Пример конфигурации
-├── docker-compose.yaml        # Docker конфигурация (опционально)
-├── load_to_elasticsearch.py  # Загрузка документов в ES
-├── main.py                    # Точка входа
-├── README.md                  # Документация
-└── requirements.txt           # Python зависимости
-```
-
-## Смена embedding модели
-
-### Использование моделей из списка
-
-В `package/config.py` измените:
-
-```python
-DEFAULT_EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL",
-    "paraphrase-multilingual-MiniLM-L12-v2"  # или другую модель
-)
-```
-
-Доступные модели:
-- `paraphrase-multilingual-MiniLM-L12-v2` (384 dims)
-- `intfloat/multilingual-e5-base` (768 dims)
-- `intfloat/multilingual-e5-large` (1024 dims)
-
-### Использование любой модели с HuggingFace
-
-Укажите название модели:
-
-```python
-DEFAULT_EMBEDDING_MODEL = "sentence-transformers/LaBSE"
-```
-
-Система автоматически:
-- Определит размерность через HuggingFace API
-- Создаст правильный индекс
-- Загрузит модель
-
-Пересоздайте индекс:
-
-```
-curl -X DELETE http://localhost:9200/psb_docs
-```
-
-```
-python load_to_elasticsearch.py
-```
-
-## Формат тестового набора
-
-Файл JSONL (по одному вопросу на строку):
-
-```json
-{"question": "Как восстановить ПИН-код?", "expected_answer": "Обратитесь в отделение банка с паспортом"}
-{"question": "Где посмотреть баланс?", "expected_answer": "В мобильном приложении PSB-Mobile"}
-```
-
-Сохраните в `data/testsets/questions.jsonl`
-
-Запустите тест:
-
-```
-python main.py --testset data/testsets/questions.jsonl
-```
-
-## Метрики качества
-
-После тестирования генерируется HTML отчет в `data/reports/`
-
-Метрики:
-- Процент правильных ответов
-- Средняя схожесть ответов
-- Качество RAG (средний score найденных chunks)
-- Детальная аналитика по каждому вопросу
-- Распределение качества chunks
-- Статистика использования источников
-
-## Устранение неполадок
-
-### Elasticsearch не запускается
-
-Проверьте порт:
-
-```
-netstat -an | findstr 9200
-```
-
-Убедитесь что нет других процессов на порту 9200.
-
-### Ollama не отвечает
-
-Проверьте что Ollama запущен:
-
-```
-curl http://localhost:11434/api/tags
-```
-
-Проверьте доступные модели:
-
-```
-ollama list
-```
-
-### Ошибка размерности векторов
-
-Удалите индекс и пересоздайте:
-
-```
-curl -X DELETE http://localhost:9200/psb_docs
-```
-
-```
-python load_to_elasticsearch.py
-```
-
-### Низкое качество ответов
-
-Увеличьте TOP-K:
-
-```
-python main.py --top-k 5
-```
-
-Используйте лучшую embedding модель:
-
-Измените в `.env`:
-```
+# Embeddings Configuration
 EMBEDDING_MODEL=intfloat/multilingual-e5-large
-```
+EMBEDDING_DIMS=1024
 
-Используйте более мощную LLM:
-
-```
-ollama pull qwen2.5:7b
-```
-
-```
-python main.py --ollama-model qwen2.5:7b
-```
-
-## Рекомендуемые конфигурации
-
-### Для быстрого тестирования
-
-```
-EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
-OLLAMA_MODEL=gemma2:2b
+# Evaluation Configuration
 TOP_K=3
+NEED_HYDE=True
+SIMILARITY_THRESHOLD=0.7
 ```
 
-```
-python main.py --max-questions 5 --no-hyde
-```
-
-### Для максимального качества
-
-```
-EMBEDDING_MODEL=intfloat/multilingual-e5-large
-OLLAMA_MODEL=qwen2.5:7b
-TOP_K=5
+### Шаг 4: Загрузка документов в Elasticsearch
+```bash
+# Положить .txt или .md файлы в data/documents/
+# Затем загрузить в Elasticsearch:
+python load_to_elasticsearch.py
 ```
 
-```
-python main.py --max-questions 20 --hyde --timeout 900
-```
+### Шаг 5: Быстрый тест
+```bash
+# Задать один вопрос, указанный в testrag
+python testrag.py "Что такое ИЗП?"
 
-### Для production
-
-```
-EMBEDDING_MODEL=intfloat/multilingual-e5-large
-OLLAMA_MODEL=gemma2:9b
-TOP_K=5
-SIMILARITY_THRESHOLD=0.70
-```
+# С параметрами
+python testrag.py "Что такое закупка?" --top-k 5 --no-hyde --show-sources
 
 ```
-python main.py --testset data/testsets/production_questions.jsonl --hyde
+
+### Шаг 6: Полное тестирование
+```bash
+# Тестирование с Elasticsearch
+python main.py  --max-questions 10  #берет по умолчанию из эластика
+
+# Тестирование с локальными файлами
+python main.py --local-files --extract-qa --max-questions 10
+
+# Параметры запуска
+python main.py \
+  --model gemma2:2b \
+  --top-k 5 \
+  --threshold 0.7 \
+  --max-questions 20 \
+  --seed 42
 ```
+
+### Параметры командной строки
+
+#### testrag.py (быстрый тест)
+```bash
+python testrag.py [вопрос] [опции]
+
+Опции:
+  --top-k N              Количество документов (default: 3)
+  --no-hyde              Отключить HyDE
+  --model MODEL          Ollama модель
+  --embeddings MODEL     Embedding модель
+  --show-docs            Показать полные документы
+  --show-sources         Показать только источники
+  --quiet                Минимальный вывод
+```
+
+
+##   Метрики качества
+
+### Автоматическая оценка
+
+Система автоматически оценивает качество ответов по нескольким метрикам:
+
+#### 1. Accuracy (Точность)
+```
+Accuracy = (Правильных ответов / Всего вопросов) × 100%
+```
+- Ответ считается **правильным**, если `similarity >= threshold` (по умолчанию 0.7)
+- Измеряется в процентах от 0% до 100%
+
+#### 2. Cosine Similarity (Схожесть)
+```
+Similarity = cosine_similarity(embedding_generated, embedding_expected)
+```
+- Вычисляется через embedding модель (multilingual-e5-large)
+- Диапазон от 0.0 (разные) до 1.0 (идентичные)
+- **Порог качества**: 0.7 (70%)
+
+#### 3. RAG Quality Score
+```
+RAG Score = average(chunk_scores)
+```
+- Оценка качества найденных документов
+- Показывает релевантность векторного поиска
+- **Высокое качество**: ≥0.7 (70%+)
+- **Среднее качество**: 0.5-0.7 (50-70%)
+- **Низкое качество**: <0.5 (<50%)
+
+#### 4. Response Time
+- Время генерации одного ответа (в секундах)
+- Включает: поиск chunks + генерация LLM
+
+### HTML Отчеты
+
+После каждого тестирования генерируется детальный HTML отчет в `data/reports/`:
+
+**Содержание отчета:**
+- Общая статистика (accuracy, similarity, качество RAG)
+- Графики распределения качества chunks
+- Использование источников (какие документы чаще находились)
+- Детальная таблица всех найденных chunks
+- Детальное сравнение: вопрос → ожидаемый ответ → ответ системы → найденные chunks
+
+**Пример отчета:**
+```
+data/reports/report_hyde_20250122_143045.html
+```
+
+### Интерпретация результатов
+
+#### Отличные результаты 
+- Accuracy: **85-100%**
+- Avg Similarity: **0.80-1.00**
+- RAG Score: **0.75-1.00**
+
+#### Хорошие результаты 
+- Accuracy: **70-85%**
+- Avg Similarity: **0.70-0.80**
+- RAG Score: **0.65-0.75**
+
+#### Требуют улучшения 
+- Accuracy: **<70%**
+- Avg Similarity: **<0.70**
+- RAG Score: **<0.65**
+
+
+## 🔧 Дополнительно
+
+### Очистка и перезапуск
+```bash
+# Очистить Elasticsearch
+docker-compose down -v
+
+# Пересоздать индекс
+python load_to_elasticsearch.py
+
+# Полная очистка
+rm -rf data/reports/*
+```
+
+### Troubleshooting
+
+**Ollama не найдена:**
+```bash
+# Проверить статус
+docker ps | grep ollama
+
+# Перезапустить
+docker-compose restart ollama
+
+# Загрузить модель
+docker exec -it test_llm_ollama ollama pull gemma2:2b
+```
+
+**Elasticsearch недоступен:**
+```bash
+# Проверить
+curl http://localhost:9200
+
+# Перезапустить
+docker-compose restart elasticsearch
+```
+
+**Ошибки импорта:**
+```bash
+# Переустановить зависимости
+pip install --upgrade -r requirements.txt
+```
+
+---

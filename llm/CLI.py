@@ -8,7 +8,7 @@ CLI аргументы для TEST_LLM
 
 import argparse
 
-from package.config import (
+from connections.config import (
     DEFAULT_OLLAMA_MODEL,
     DEFAULT_OLLAMA_HOST,
     DEFAULT_OLLAMA_TIMEOUT,
@@ -94,7 +94,7 @@ def parse_arguments():
     parser.add_argument(
         "--max-questions",
         type=int,
-        default=10,
+        default=5,
         help="Maximum questions to test (default: 10)"
     )
     

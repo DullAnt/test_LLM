@@ -1,6 +1,6 @@
 # Ollama Configuration
 # OLLAMA_MODEL=llama3
-# OLLAMA_MODEL=gemma2:2b
+OLLAMA_MODEL=gemma2:2b
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_TIMEOUT=600
 
@@ -12,7 +12,8 @@ ELASTIC_INDEX=psb_docs
 
 # Embeddings Configuration
 EMBEDDING_MODEL=intfloat/multilingual-e5-large
+EMBEDDING_DIMS=1024
 # Evaluation Configuration
-SIMILARITY_THRESHOLD=0.7
-# TOP_K=5
 TOP_K=3
+NEED_HYDE=True
+SIMILARITY_THRESHOLD=0.7

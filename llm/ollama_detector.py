@@ -3,7 +3,7 @@
 """
 
 import requests
-from package.config import DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_HOST
+from connections.config import DEFAULT_OLLAMA_MODEL, DEFAULT_OLLAMA_HOST
 
 
 def detect_ollama():

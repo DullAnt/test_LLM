@@ -138,10 +138,10 @@ def save_questions(questions: List[Dict[str, str]], output_dir: str = "data/test
             for q in questions:
                 f.write(json.dumps(q, ensure_ascii=False) + '\n')
         
-        print(f"✅ Сохранено {len(questions)} вопросов в {filepath}")
+        print(f" Сохранено {len(questions)} вопросов в {filepath}")
         return str(filepath)
     except Exception as e:
-        print(f"❌ Ошибка сохранения: {e}")
+        print(f" Ошибка сохранения: {e}")
         return ""
 
 

@@ -9,7 +9,6 @@ import ollama
 from ollama import Client
 from langchain_ollama import ChatOllama
 
-
 class OllamaClient:
     """Клиент для работы с Ollama (без requests)"""
 
@@ -69,6 +68,23 @@ class OllamaClient:
                 num_predict=200,
                 repeat_penalty=1.1,
             )
+    
+    def _clean_response(self, text: str) -> str:
+        """Очистка ответа от лишних элементов"""
+        if not text:
+            return ""
+        
+        # Убираем markdown форматирование
+        text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)  # **bold**
+        text = re.sub(r'\*(.+?)\*', r'\1', text)      # *italic*
+        text = re.sub(r'`(.+?)`', r'\1', text)        # `code`
+        
+        # Убираем множественные пробелы и переносы
+        text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+        text = re.sub(r' +', ' ', text)
+        
+        return text.strip()
+        
 
     def _detect_source(self) -> str:
         """Определить источник Ollama по порту"""
@@ -187,43 +203,3 @@ class OllamaClient:
         except Exception as e:
             print(f"[ERROR] Ошибка при генерации через ChatOllama: {e}")
             return "Ошибка генерации ответа"
-
-    # =========================
-    # Helpers
-    # =========================
-
-    def _print_install_model_help(self):
-        print("\n[TIP]  Как установить модель:")
-        if ":11435" in self.host:
-            print("       1. Интерактивно: python setup_ollama.py")
-            print(f"       2. Вручную: docker exec test_llm_ollama ollama pull {self.model}")
-        else:
-            print(f"       ollama pull {self.model}")
-            print("       Рекомендуемые: qwen2.5:7b, gemma2:9b, gemma2:2b")
-
-    def _print_connection_help(self):
-        print("\n[TIP] Как исправить:")
-        if ":11434" in self.host:
-            print("       1) Проверьте что Ollama запущена: ollama list")
-            print("       2) Переустановите: https://ollama.com/download")
-            print("       3) Или используйте Docker: python main.py --ollama-host http://localhost:11435")
-        elif ":11435" in self.host:
-            print("       1) Проверьте контейнер: docker ps | grep ollama")
-            print("       2) Запустите: docker-compose up -d ollama")
-            print("       3) Или используйте локальную: python main.py --ollama-host http://localhost:11434")
-        else:
-            print(f"       Проверьте доступность сервера: {self.host}")
-
-    def _clean_response(self, text: str) -> str:
-        text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
-        text = re.sub(r"\*([^*]+)\*", r"\1", text)
-        text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
-        text = re.sub(r"^\d+\.\s+", "", text, flags=re.MULTILINE)
-        text = re.sub(r"^[-•]\s+", "", text, flags=re.MULTILINE)
-        text = re.sub(r"^(Ответ:|ОТВЕТ:)\s*", "", text, flags=re.IGNORECASE)
-        text = re.sub(r"^(Краткий ответ:|КРАТКИЙ ОТВЕТ:)\s*", "", text, flags=re.IGNORECASE)
-        return text.strip()
-
-    def __repr__(self):
-        status = " Connected" if self.check_connection() else " Disconnected"
-        return f"OllamaClient(host='{self.host}', model='{self.model}', status={status})"

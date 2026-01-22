@@ -1,20 +1,13 @@
-# """
-# Evaluate модуль - Оценка качества ответов LLM
-# """
-
 """
-Evaluation module для тестирования LLM
+Оценка качества RAG системы
 """
 
-from .questions import load_questions, save_questions, extract_questions, extract_questions_from_elasticsearch
-from .similarity import calculate_similarity
-from .metrics import generate_html_report
+from evaluate.evaluator import RAGEvaluator
+from evaluate.metrics import generate_html_report
+from evaluate.similarity import calculate_similarity
 
 __all__ = [
-    'load_questions',
-    'save_questions',
-    'extract_questions',
-    'extract_questions_from_elasticsearch',
-    'calculate_similarity',
-    'generate_html_report',
+    "RAGEvaluator",
+    "generate_html_report",
+    "calculate_similarity",
 ]

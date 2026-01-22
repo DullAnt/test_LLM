@@ -1,19 +1,24 @@
-# ============================================
-# package/evaluator.py (ПОЛНАЯ ИСПРАВЛЕННАЯ ВЕРСИЯ)
-# ============================================
+"""
+Evaluator для оценки качества RAG системы
+"""
 
 import time
 import random
 from datetime import datetime
 from typing import List, Dict, Optional
 
-from rag.ollama_client import OllamaClient
-from rag.retriever import DocumentRetriever
-from evaluate.questions import load_questions, extract_questions, extract_questions_from_elasticsearch
+from llm.ollama_client import OllamaClient
+from llm.retriever import DocumentRetriever
+from llm.embeddings import get_embedding_model
+from load.questions import (
+    load_questions,
+    extract_questions,
+    extract_questions_from_elasticsearch
+)
 from evaluate.similarity import calculate_similarity
 from evaluate.metrics import generate_html_report
-from rag.embeddings import get_embedding_model
-from package.config import Config
+from connections.config import Config
+from connections.elastic import ElasticsearchClient
 
 
 class RAGEvaluator:
@@ -82,7 +87,7 @@ class RAGEvaluator:
             print("[ERROR] Не удалось подключиться к Ollama!")
             return None
 
-        print(f" Ollama клиент ({self.model}) OK")
+        print(f"  Ollama клиент ({self.model}) OK")
 
         retriever = DocumentRetriever(
             embedding_model=embedding_model,
@@ -94,7 +99,7 @@ class RAGEvaluator:
             es_password=Config.ELASTIC_PASSWORD,
             es_api_key=Config.ELASTIC_API_KEY,
         )
-        print("   Document retriever OK")
+        print("  Document retriever OK")
 
         results = self._run_tests(questions, retriever, ollama_client)
 
@@ -114,53 +119,29 @@ class RAGEvaluator:
         extract_qa: bool,
         es_index: Optional[str] = None,
     ) -> List[Dict]:
-        """
-        Загрузка вопросов с правильной логикой:
-        
-        1. questions_path задан → загрузить из файла
-        2. documents пустой → извлечь из Elasticsearch (дефолтный режим)
-        3. extract_qa=True + documents не пустой → извлечь из локальных документов
-        """
+        """Загрузка вопросов"""
 
-        # Приоритет 1: Явно указанный файл с вопросами
+        # Приоритет 1: Явно указанный файл
         if questions_path:
-            print(f"\n[QUESTIONS] Загрузка вопросов из {questions_path}...")
+            print(f"\n[QUESTIONS] Загрузка из {questions_path}...")
             questions = load_questions(questions_path)
             if len(questions) > max_questions:
                 questions = random.sample(questions, max_questions)
             return questions
 
-        # Приоритет 2: Извлечение из Elasticsearch (дефолтный режим)
+        # Приоритет 2: Извлечение из Elasticsearch
         if not documents or len(documents) == 0:
-            print("\n[QUESTIONS] Извлечение вопросов из Elasticsearch...")
+            print("\n[QUESTIONS] Извлечение из Elasticsearch...")
             
-            # Создаем ES клиент
-            from elasticsearch import Elasticsearch
-            
-            # Парсим URL
-            es_url = Config.ELASTIC_URL
-            if Config.ELASTIC_USER and Config.ELASTIC_PASSWORD:
-                es_client = Elasticsearch(
-                    [es_url],
-                    basic_auth=(Config.ELASTIC_USER, Config.ELASTIC_PASSWORD),
-                    verify_certs=False,
-                )
-            elif Config.ELASTIC_API_KEY:
-                es_client = Elasticsearch(
-                    [es_url],
-                    api_key=Config.ELASTIC_API_KEY,
-                    verify_certs=False,
-                )
-            else:
-                es_client = Elasticsearch([es_url], verify_certs=False)
+            # Используем единый ES клиент
+            es_client = ElasticsearchClient.from_config(Config)
             
             # Извлекаем вопросы
             questions = extract_questions_from_elasticsearch(
-                es_client=es_client,
+                es_client=es_client.es,  # Передаем нативный ES клиент
                 index=es_index or Config.ELASTIC_INDEX,
             )
             
-            # Ограничиваем количество
             if len(questions) > max_questions:
                 questions = random.sample(questions, max_questions)
             
@@ -168,13 +149,12 @@ class RAGEvaluator:
 
         # Приоритет 3: Извлечение из локальных документов
         if extract_qa:
-            print("\n[QUESTIONS] Авто-извлечение вопросов из локальных документов...")
+            print("\n[QUESTIONS] Извлечение из локальных документов...")
             questions = extract_questions(documents)
             if len(questions) > max_questions:
                 questions = random.sample(questions, max_questions)
             return questions
 
-        # Если ничего не подошло
         return []
 
     def _run_tests(self, questions: List[Dict], retriever: DocumentRetriever, ollama_client: OllamaClient) -> List[Dict]:
@@ -197,8 +177,8 @@ class RAGEvaluator:
             sim = calculate_similarity(ans, expected) if expected else 0.0
             ok = sim >= self.threshold if expected else True
 
-            print(f"Время: {dt:.2f}s")
-            print(f"Similarity: {sim:.1%}")
+            print(f"  Время: {dt:.2f}s")
+            print(f"  Similarity: {sim:.1%}")
             print(f"  {'✅' if ok else '❌'} {'Правильно' if ok else 'Неправильно'}")
 
             results.append({
