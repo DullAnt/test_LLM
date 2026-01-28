@@ -18,41 +18,71 @@ def generate_html_report(
     """Генерация HTML отчета с RAG аналитикой"""
 
     total = len(results)
-    correct = sum(1 for r in results if r.get('is_correct', False))
+    correct = sum(1 for r in results if r.get("is_correct", False))
     incorrect = total - correct
-    accuracy = (correct / total * 100) if total > 0 else 0
-    avg_similarity = sum(r.get('similarity', 0) for r in results) / total if total > 0 else 0
+    accuracy = (correct / total * 100) if total > 0 else 0.0
+    avg_similarity = (sum(r.get("similarity", 0.0) for r in results) / total) if total > 0 else 0.0
 
     # =============================================================================
-    # ✅ НОВОЕ: RAG-аналитика считается по ЛУЧШЕМУ чанку на вопрос (best_chunk)
+    # ✅ RAG: собираем ВСЕ чанки (это и есть top_k отображение)
+    # =============================================================================
+    all_chunks = []          # плоский список всех чанков по всем вопросам
+    all_sources_used = []    # источники по всем чанкам
+
+    # =============================================================================
+    # ✅ RAG: отдельно собираем ЛУЧШИЙ чанк на вопрос (summary)
     # =============================================================================
     best_scores = []
-    sources_used = []
-    best_chunks = []  # для детальной таблицы (по 1 на вопрос)
+    best_sources_used = []
+    best_chunks = []         # 1 строка на вопрос (лучший)
+    best_chunk_map = {}      # question_index -> best_chunk (опционально)
 
-    for r in results:
+    for qi, r in enumerate(results, start=1):
+        # все чанки по вопросу
+        chunks = r.get("retrieved_chunks") or []
+        for c in chunks:
+            all_chunks.append({
+                "question_index": qi,
+                "question": r.get("question", ""),
+                "chunk": c,
+            })
+            all_sources_used.append(c.get("source", "unknown") or "unknown")
+
+        # лучший чанк по вопросу (если есть)
         best_chunk = r.get("best_chunk")
         best_score = float(r.get("best_chunk_score", 0.0) or 0.0)
-
         if best_chunk:
             best_scores.append(best_score)
-            sources_used.append(best_chunk.get("source", "unknown"))
+            best_sources_used.append(best_chunk.get("source", "unknown") or "unknown")
             best_chunks.append({
+                "question_index": qi,
                 "question": r.get("question", ""),
                 "chunk": best_chunk,
-                "score": best_score
+                "score": best_score,
             })
+            best_chunk_map[qi] = best_chunk
 
-    # Качество RAG = средний best_score (а не среднее по всем chunks)
-    avg_chunk_score = (sum(best_scores) / len(best_scores)) if best_scores else 0.0
+    # =============================================================================
+    # ✅ Метрики качества RAG:
+    # - "Качество RAG" считаем по лучшему чанку на вопрос (как summary-оценка)
+    # - Но отображаем ВСЕ чанки
+    # =============================================================================
+    avg_best_score = (sum(best_scores) / len(best_scores)) if best_scores else 0.0
 
-    # Статистика по источникам (по лучшим чанкам)
-    source_stats = Counter(sources_used)
+    # статистика по источникам:
+    source_stats_all = Counter(all_sources_used)
+    source_stats_best = Counter(best_sources_used)
 
-    # Распределение scores (по лучшим чанкам)
-    high_quality = sum(1 for s in best_scores if s >= 0.7)
-    medium_quality = sum(1 for s in best_scores if 0.5 <= s < 0.7)
-    low_quality = sum(1 for s in best_scores if s < 0.5)
+    # распределение качества по ВСЕМ чанкам (это честнее, раз ты хочешь видеть всё)
+    all_scores = [float(x["chunk"].get("score", 0.0) or 0.0) for x in all_chunks]
+    high_quality_all = sum(1 for s in all_scores if s >= 0.7)
+    medium_quality_all = sum(1 for s in all_scores if 0.5 <= s < 0.7)
+    low_quality_all = sum(1 for s in all_scores if s < 0.5)
+
+    # распределение качества по ЛУЧШИМ (как доп. сводка)
+    high_quality_best = sum(1 for s in best_scores if s >= 0.7)
+    medium_quality_best = sum(1 for s in best_scores if 0.5 <= s < 0.7)
+    low_quality_best = sum(1 for s in best_scores if s < 0.5)
 
     html = f"""<!DOCTYPE html>
 <html lang="ru">
@@ -231,6 +261,13 @@ def generate_html_report(
             overflow: hidden;
             text-overflow: ellipsis;
         }}
+        .footer {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            font-size: 0.95em;
+        }}
     </style>
 </head>
 <body>
@@ -263,8 +300,8 @@ def generate_html_report(
                 <div class="stat-value">{avg_similarity:.1%}</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Качество RAG</div>
-                <div class="stat-value">{avg_chunk_score:.1%}</div>
+                <div class="stat-label">Качество RAG (по лучшему чанку)</div>
+                <div class="stat-value">{avg_best_score:.1%}</div>
             </div>
         </div>
 
@@ -276,48 +313,52 @@ def generate_html_report(
                     <h3>Статистика поиска</h3>
                     <table style="box-shadow: none;">
                         <tr>
-                            <td style="border: none;"><strong>Лучших chunks (по 1 на вопрос):</strong></td>
-                            <td style="border: none;">{len(best_scores)}</td>
+                            <td style="border: none;"><strong>Всего chunks найдено:</strong></td>
+                            <td style="border: none;">{len(all_chunks)}</td>
+                        </tr>
+                        <tr>
+                            <td style="border: none;"><strong>Chunks на вопрос:</strong></td>
+                            <td style="border: none;">{(len(all_chunks) / total) if total > 0 else 0:.1f}</td>
                         </tr>
                         <tr>
                             <td style="border: none;"><strong>Средний best score:</strong></td>
-                            <td style="border: none;">{avg_chunk_score:.1%}</td>
+                            <td style="border: none;">{avg_best_score:.1%}</td>
                         </tr>
                         <tr>
-                            <td style="border: none;"><strong>Уникальных источников:</strong></td>
-                            <td style="border: none;">{len(source_stats)}</td>
+                            <td style="border: none;"><strong>Уникальных источников (все чанки):</strong></td>
+                            <td style="border: none;">{len(source_stats_all)}</td>
                         </tr>
                     </table>
                 </div>
 
                 <div class="rag-card">
-                    <h3>Распределение качества chunks</h3>
+                    <h3>Распределение качества (ВСЕ чанки)</h3>
                     <div class="progress-bar">
-                        <div class="progress-segment bar-high" style="width: {high_quality / len(best_scores) * 100 if best_scores else 0}%; background: linear-gradient(90deg, #10b981 0%, #059669 100%);">
-                            {high_quality} высокое (≥70%)
+                        <div class="progress-segment bar-high" style="width: {(high_quality_all / len(all_scores) * 100) if all_scores else 0}%; background: linear-gradient(90deg, #10b981 0%, #059669 100%);">
+                            {high_quality_all} высокое (≥70%)
                         </div>
-                        <div class="progress-segment bar-medium" style="width: {medium_quality / len(best_scores) * 100 if best_scores else 0}%; background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);">
-                            {medium_quality} среднее (50-70%)
+                        <div class="progress-segment bar-medium" style="width: {(medium_quality_all / len(all_scores) * 100) if all_scores else 0}%; background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);">
+                            {medium_quality_all} среднее (50-70%)
                         </div>
-                        <div class="progress-segment bar-low" style="width: {low_quality / len(best_scores) * 100 if best_scores else 0}%; background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);">
-                            {low_quality} низкое (&lt;50%)
+                        <div class="progress-segment bar-low" style="width: {(low_quality_all / len(all_scores) * 100) if all_scores else 0}%; background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);">
+                            {low_quality_all} низкое (&lt;50%)
                         </div>
                     </div>
                     <p style="margin-top: 15px; font-size: 0.85em; color: #666;">
-                        Высокое качество: {high_quality / len(best_scores) * 100 if best_scores else 0:.1f}%<br>
-                        Среднее качество: {medium_quality / len(best_scores) * 100 if best_scores else 0:.1f}%<br>
-                        Низкое качество: {low_quality / len(best_scores) * 100 if best_scores else 0:.1f}%
+                        Высокое качество: {(high_quality_all / len(all_scores) * 100) if all_scores else 0:.1f}%<br>
+                        Среднее качество: {(medium_quality_all / len(all_scores) * 100) if all_scores else 0:.1f}%<br>
+                        Низкое качество: {(low_quality_all / len(all_scores) * 100) if all_scores else 0:.1f}%
                     </p>
                 </div>
 
                 <div class="rag-card">
-                    <h3>Использование источников</h3>
+                    <h3>Использование источников (ВСЕ чанки)</h3>
                     <div style="max-height: 300px; overflow-y: auto;">
 """
 
-    # Добавить статистику по источникам
-    for source, count in source_stats.most_common():
-        percentage = (count / len(best_scores) * 100) if best_scores else 0
+    # Источники по ВСЕМ чанкам
+    for source, count in source_stats_all.most_common():
+        percentage = (count / len(all_chunks) * 100) if all_chunks else 0
         html += f"""
                         <div style="margin: 10px 0;">
                             <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
@@ -336,7 +377,70 @@ def generate_html_report(
             </div>
 
             <h3 style="margin-top: 40px; margin-bottom: 20px; color: #667eea; font-size: 1.5em;">
-                Детальная таблица лучших chunks (по 1 на вопрос)
+                Детальная таблица ВСЕХ найденных chunks (TOP_K на вопрос)
+            </h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">#</th>
+                        <th style="width: 14%;">Вопрос</th>
+                        <th style="width: 80px;">Ранг</th>
+                        <th style="width: 15%;">Источник</th>
+                        <th style="width: 110px;">Score</th>
+                        <th>Найденный chunk</th>
+                    </tr>
+                </thead>
+                <tbody>
+"""
+
+    # Таблица ВСЕХ чанков
+    row_id = 1
+    for row in all_chunks:
+        qi = row.get("question_index", 0)
+        q_full = row.get("question", "") or ""
+        question = (q_full[:50] + "...") if len(q_full) > 50 else q_full
+
+        chunk = row.get("chunk") or {}
+        chunk_text_full = chunk.get("text", "") or ""
+        chunk_text = chunk_text_full[:200] + ("..." if len(chunk_text_full) > 200 else "")
+        chunk_text = chunk_text.replace("<", "&lt;").replace(">", "&gt;")
+
+        chunk_source = chunk.get("source", "unknown") or "unknown"
+        chunk_score = float(chunk.get("score", 0.0) or 0.0)
+        chunk_rank = int(chunk.get("rank", 0) or 0)
+
+        if chunk_score >= 0.7:
+            bar_class = "bar-high"
+        elif chunk_score >= 0.5:
+            bar_class = "bar-medium"
+        else:
+            bar_class = "bar-low"
+
+        html += f"""
+                    <tr>
+                        <td><strong>{row_id}</strong></td>
+                        <td style="font-size: 0.85em; color: #666;">Q{qi}: {question}</td>
+                        <td style="text-align: center;"><strong>#{chunk_rank}</strong></td>
+                        <td><span class="chunk-source">{chunk_source}</span></td>
+                        <td>
+                            <div class="bar">
+                                <div class="bar-fill {bar_class}" style="width: {chunk_score * 100}%; ">
+                                    {chunk_score:.1%}
+                                </div>
+                            </div>
+                        </td>
+                        <td style="font-size: 0.85em;">{chunk_text}</td>
+                    </tr>
+"""
+        row_id += 1
+
+    # Оставим как summary таблицу лучших (по желанию)
+    html += """
+                </tbody>
+            </table>
+
+            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #667eea; font-size: 1.5em;">
+                Детальная таблица ЛУЧШИХ chunks (по 1 на вопрос)
             </h3>
             <table>
                 <thead>
@@ -345,7 +449,7 @@ def generate_html_report(
                         <th style="width: 22%;">Вопрос</th>
                         <th style="width: 80px;">Ранг</th>
                         <th style="width: 18%;">Источник</th>
-                        <th style="width: 100px;">Score</th>
+                        <th style="width: 110px;">Score</th>
                         <th>Найденный chunk</th>
                     </tr>
                 </thead>
@@ -353,31 +457,35 @@ def generate_html_report(
 """
 
     for i, row in enumerate(best_chunks, 1):
-        question = (row.get("question", "")[:50] + "...") if len(row.get("question", "")) > 50 else row.get("question", "")
+        qi = row.get("question_index", 0)
+        q_full = row.get("question", "") or ""
+        question = (q_full[:50] + "...") if len(q_full) > 50 else q_full
+
         chunk = row.get("chunk", {}) or {}
         chunk_text_full = chunk.get("text", "") or ""
         chunk_text = chunk_text_full[:200] + ("..." if len(chunk_text_full) > 200 else "")
-        chunk_text = chunk_text.replace('<', '&lt;').replace('>', '&gt;')
-        chunk_source = chunk.get("source", "unknown")
+        chunk_text = chunk_text.replace("<", "&lt;").replace(">", "&gt;")
+
+        chunk_source = chunk.get("source", "unknown") or "unknown"
         chunk_score = float(row.get("score", 0.0) or 0.0)
-        chunk_rank = chunk.get("rank", 0)
+        chunk_rank = int(chunk.get("rank", 0) or 0)
 
         if chunk_score >= 0.7:
-            bar_class = 'bar-high'
+            bar_class = "bar-high"
         elif chunk_score >= 0.5:
-            bar_class = 'bar-medium'
+            bar_class = "bar-medium"
         else:
-            bar_class = 'bar-low'
+            bar_class = "bar-low"
 
         html += f"""
                     <tr>
                         <td><strong>{i}</strong></td>
-                        <td style="font-size: 0.85em; color: #666;">Q{i}: {question}</td>
+                        <td style="font-size: 0.85em; color: #666;">Q{qi}: {question}</td>
                         <td style="text-align: center;"><strong>#{chunk_rank}</strong></td>
                         <td><span class="chunk-source">{chunk_source}</span></td>
                         <td>
                             <div class="bar">
-                                <div class="bar-fill {bar_class}" style="width: {chunk_score * 100}%; {''}">
+                                <div class="bar-fill {bar_class}" style="width: {chunk_score * 100}%; ">
                                     {chunk_score:.1%}
                                 </div>
                             </div>
@@ -386,7 +494,7 @@ def generate_html_report(
                     </tr>
 """
 
-    # дальше — исходный блок "Детальные результаты" (оставляем без изменений)
+    # Блок "Детальные результаты" оставим как есть (с твоей упрощённой версткой)
     html += """
                 </tbody>
             </table>
@@ -399,7 +507,7 @@ def generate_html_report(
                     <tr>
                         <th style="width: 40px;">#</th>
                         <th style="width: 25%;">Вопрос</th>
-                        <th style="width: 100px;">Результат</th>
+                        <th style="width: 120px;">Результат</th>
                         <th style="width: 120px;">Схожесть</th>
                         <th>Сравнение</th>
                     </tr>
@@ -408,25 +516,21 @@ def generate_html_report(
 """
 
     for i, result in enumerate(results, 1):
-        question = result.get('question', '')
-        is_correct = result.get('is_correct', False)
-        similarity = result.get('similarity', 0)
-        generated = result.get('generated_answer', '')
-        expected = result.get('expected_answer', '')
+        question = (result.get("question", "") or "").replace("<", "&lt;").replace(">", "&gt;")
+        is_correct = bool(result.get("is_correct", False))
+        similarity = float(result.get("similarity", 0.0) or 0.0)
 
-        question = question.replace('<', '&lt;').replace('>', '&gt;')
-        generated_escaped = generated.replace('<', '&lt;').replace('>', '&gt;')
-        expected_escaped = expected.replace('<', '&lt;').replace('>', '&gt;')
+        generated = (result.get("generated_answer", "") or "").replace("<", "&lt;").replace(">", "&gt;")
+        expected = (result.get("expected_answer", "") or "").replace("<", "&lt;").replace(">", "&gt;")
 
-        status_class = 'status-correct' if is_correct else 'status-incorrect'
-        status_text = 'Правильно' if is_correct else 'Неправильно'
+        status_text = "Правильно" if is_correct else "Неправильно"
 
         if similarity >= 0.7:
-            bar_class = 'bar-high'
+            bar_class = "bar-high"
         elif similarity >= 0.5:
-            bar_class = 'bar-medium'
+            bar_class = "bar-medium"
         else:
-            bar_class = 'bar-low'
+            bar_class = "bar-low"
 
         similarity_percent = similarity * 100
 
@@ -437,17 +541,17 @@ def generate_html_report(
                         <td>{status_text}</td>
                         <td>
                             <div class="bar">
-                                <div class="bar-fill {bar_class}" style="width: {similarity_percent}%;">
+                                <div class="bar-fill {bar_class}" style="width: {similarity_percent}%; ">
                                     {similarity:.1%}
                                 </div>
                             </div>
                         </td>
                         <td>
                             <div style="padding: 10px; background: #f0fdf4; margin-bottom: 8px; border-left: 4px solid #10b981;">
-                                <strong>Ожидаемый:</strong><br>{expected_escaped[:200]}{'...' if len(expected_escaped) > 200 else ''}
+                                <strong>Ожидаемый:</strong><br>{expected[:200]}{'...' if len(expected) > 200 else ''}
                             </div>
                             <div style="padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b;">
-                                <strong>Сгенерированный:</strong><br>{generated_escaped[:200]}{'...' if len(generated_escaped) > 200 else ''}
+                                <strong>Сгенерированный:</strong><br>{generated[:200]}{'...' if len(generated) > 200 else ''}
                             </div>
                         </td>
                     </tr>
@@ -458,7 +562,7 @@ def generate_html_report(
             </table>
         </div>
 
-        <div class="footer" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center;">
+        <div class="footer">
             <p style="font-size: 1.1em; font-weight: 600;">TEST_LLM - Система тестирования LLM</p>
             <p style="margin-top: 10px; opacity: 0.9;">Векторный поиск + Косинусное сходство</p>
         </div>
@@ -468,7 +572,7 @@ def generate_html_report(
 """
 
     try:
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(html)
         print(f"[SUCCESS] HTML отчет сохранен: {output_path}")
     except Exception as e:

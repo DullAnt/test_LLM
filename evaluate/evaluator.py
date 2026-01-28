@@ -133,8 +133,11 @@ class RAGEvaluator:
         if not documents or len(documents) == 0:
             print("\n[QUESTIONS] Извлечение из Elasticsearch...")
             
-            # Используем единый ES клиент
-            es_client = ElasticsearchClient.from_config(Config)
+            es_client = ElasticsearchClient(
+                url=Config.ELASTIC_URL,
+                index_name=Config.ELASTIC_INDEX
+            )
+
             
             # Извлекаем вопросы
             questions = extract_questions_from_elasticsearch(
