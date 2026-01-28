@@ -1,0 +1,20 @@
+# Ollama Configuration
+# OLLAMA_MODEL=llama3
+OLLAMA_MODEL="gemma2:2b"
+OLLAMA_HOST="http://localhost:11434"
+OLLAMA_TIMEOUT="600"
+
+
+# Elasticsearch Configuration
+ELASTIC_HOST="localhost"
+ELASTIC_PORT="9200"
+ELASTIC_INDEX="psb_docs"
+
+# Embeddings Configuration
+EMBEDDING_MODEL="intfloat/multilingual-e5-large"
+EMBEDDING_DIMS="1024"
+# Evaluation Configuration
+TOP_K="3"
+NEED_HYDE="True"
+SIMILARITY_THRESHOLD="0.7"
+DEVICE="cpu"

@@ -22,6 +22,8 @@ EMBEDDING_MODELS = {
     "intfloat/multilingual-e5-small": {"dims": 384, "size": "470MB", "quality": "good"},
 }
 
+DEFAULT_DEVICE = os.getenv("DEVICE", "cpu")
+
 # =============================================================================
 # OLLAMA
 # =============================================================================
@@ -54,7 +56,6 @@ DEFAULT_EMBEDDING_DIMS = int(
         str(EMBEDDING_MODELS.get(DEFAULT_EMBEDDING_MODEL, {}).get("dims", 1024)),
     )
 )
-
 # =============================================================================
 # RAG PARAMETERS
 # =============================================================================

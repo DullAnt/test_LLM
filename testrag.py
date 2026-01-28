@@ -11,7 +11,7 @@ from llm import head
 
 # ДЕФОЛТНЫЙ ВОПРОС (можно менять здесь)
 
-DEFAULT_QUERY = "Что такое ИЗП?"
+DEFAULT_QUERY = "Что такое СБП и как им пользоваться?"
 
 
 def parse_args():

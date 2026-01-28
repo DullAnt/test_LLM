@@ -21,7 +21,6 @@ class DocumentRetriever:
         es_user: Optional[str] = Config.ELASTIC_USER,
         es_password: Optional[str] = Config.ELASTIC_PASSWORD,
         es_api_key: Optional[str] = Config.ELASTIC_API_KEY,
-        # ВАЖНО: поля индекса
         text_field: str = "content",
         vector_field: str = "embedding",
     ):
@@ -32,16 +31,12 @@ class DocumentRetriever:
 
         self.store: Optional[ElasticsearchStore] = None
         if es_url:
-            # Создаем ES клиент
             es_client = ElasticsearchClient(url=es_url, index_name=index_name)
-            
-            # Получаем langchain store
             self.store = es_client.get_langchain_store(
                 embedding_model=embedding_model,
                 text_field=text_field,
                 vector_field=vector_field,
             )
-
 
     def retrieve_with_scores(
         self,
@@ -65,38 +60,53 @@ class DocumentRetriever:
 
         return self._search_elasticsearch(query, k)
 
-    @staticmethod
-    def _doc_builder(hit: Dict) -> Document:
-        src = hit.get("_source", {})
+    def _doc_builder(self, hit: Dict) -> Document:
+        src = hit.get("_source", {}) or {}
+
+        md = src.get("metadata", {}) or {}
+
+        # fallback на старый формат (если в ES ещё старые документы)
+        filename = md.get("filename") or src.get("filename") or "unknown"
+        chunk_id = md.get("chunk_id") or src.get("chunk_id") or 0
+        total_chunks = md.get("total_chunks") or src.get("total_chunks") or 0
+
         return Document(
-            page_content=src.get("content", ""),
+            page_content=src.get("content", "") or "",
             metadata={
-                "filename": src.get("filename", "unknown"),
-                "chunk_id": src.get("chunk_id", 0),
-                "total_chunks": src.get("total_chunks", 0),
+                "filename": filename,
+                "chunk_id": int(chunk_id) if chunk_id else 0,
+                "total_chunks": int(total_chunks) if total_chunks else 0,
+                "_index": hit.get("_index"),
+                "_id": hit.get("_id"),
             },
         )
 
     def _search_elasticsearch(self, query: str, top_k: int) -> List[Dict]:
-        # similarity_search_with_score возвращает (Document, score)
         pairs = self.store.similarity_search_with_score(
             query=query,
             k=top_k,
-            doc_builder=self._doc_builder,  # для формата индекса
+            doc_builder=self._doc_builder,
         )
 
         results: List[Dict] = []
-        for rank, (doc, score) in enumerate(pairs, 1):
+        for rank, (doc, score) in enumerate(pairs, start=1):
+            metadata = doc.metadata or {}
+
+            filename = metadata.get("filename") or "unknown"
+            chunk_id = metadata.get("chunk_id") or 0
+            total_chunks = metadata.get("total_chunks") or 0
+
             results.append(
                 {
                     "text": doc.page_content,
                     "score": float(score),
                     "rank": rank,
-                    "source": doc.metadata.get("filename", "unknown"),
-                    "chunk_id": doc.metadata.get("chunk_id", 0),
-                    "total_chunks": doc.metadata.get("total_chunks", 0),
+                    "source": str(filename),
+                    "chunk_id": int(chunk_id) if chunk_id else 0,
+                    "total_chunks": int(total_chunks) if total_chunks else 0,
                 }
             )
+
         return results
 
     def _generate_hypothesis(self, question: str) -> str:
@@ -116,7 +126,6 @@ class DocumentRetriever:
         except Exception:
             return question
 
-    # локальный поиск как fallback (без ES)
     def _search_local(self, query: str, top_k: int) -> List[Dict]:
         if not hasattr(self, "local_chunks"):
             return []
@@ -129,7 +138,14 @@ class DocumentRetriever:
         for chunk in self.local_chunks:
             chunk_embedding = self.embedding_model.encode(chunk["text"])
             score = cosine_similarity([query_embedding], [chunk_embedding])[0][0]
-            results.append({"text": chunk["text"], "score": float(score), "source": chunk["source"], "rank": 0})
+            results.append(
+                {
+                    "text": chunk["text"],
+                    "score": float(score),
+                    "source": chunk.get("source", "unknown"),
+                    "rank": 0,
+                }
+            )
 
         results.sort(key=lambda x: x["score"], reverse=True)
         for i, r in enumerate(results[:top_k], 1):

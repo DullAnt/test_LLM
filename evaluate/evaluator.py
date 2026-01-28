@@ -169,7 +169,15 @@ class RAGEvaluator:
 
             t0 = time.time()
             chunks = retriever.retrieve_with_scores(q, return_hyde_info=self.use_hyde, top_k=self.top_k)
+            
+            best_chunk = None
+            best_score = 0.0
+            if chunks:
+                best_chunk = max(chunks, key=lambda c: c.get("score", 0.0))
+                best_score = float(best_chunk.get("score", 0.0))
+            
             ctx = [c["text"] for c in chunks]
+
 
             ans = ollama_client.generate(q, ctx)
             dt = time.time() - t0
@@ -179,7 +187,7 @@ class RAGEvaluator:
 
             print(f"  Время: {dt:.2f}s")
             print(f"  Similarity: {sim:.1%}")
-            print(f"  {'✅' if ok else '❌'} {'Правильно' if ok else 'Неправильно'}")
+            print(f"  {'Правильно' if ok else 'Неправильно'}")
 
             results.append({
                 "question": q,
@@ -189,6 +197,9 @@ class RAGEvaluator:
                 "is_correct": ok,
                 "retrieved_chunks": chunks,
                 "response_time": dt,
+                "best_chunk": best_chunk,
+                "best_chunk_score": best_score,
+                "best_chunk_source": (best_chunk.get("source", "unknown") if best_chunk else "unknown"),
             })
         
         return results
