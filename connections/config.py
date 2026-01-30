@@ -23,6 +23,7 @@ EMBEDDING_MODELS = {
 }
 
 DEFAULT_DEVICE = os.getenv("DEVICE", "cpu")
+QUESTIONS_AUTOGEN_PATH = "data/questions_autogen.json"
 
 # =============================================================================
 # OLLAMA

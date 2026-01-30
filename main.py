@@ -2,10 +2,16 @@
 # main.py
 # ============================================
 
+from pathlib import Path
+
+import json
 from llm.CLI import parse_arguments
 from load.loader import load_documents_local, ensure_elasticsearch_ready, setup_directories
 from evaluate.evaluator import RAGEvaluator
 from connections.config import Config
+
+
+DEFAULT_QUESTIONS_PATH = Path("data/questions_autogen.json")
 
 
 def main():
@@ -23,11 +29,12 @@ def main():
         print(f"  need_hyde: {head.need_hyde}")
         print(f"  model: {head.model}")
         print(f"  embeddings: {head.embeddings}")
-        
+
         # Переопределяем параметры из head
         args.top_k = head.top_k
         args.hyde = head.need_hyde
         args.model = head.model
+
     # Определяем режим работы
     if args.local_files:
         print("\n[MODE] Local Files Mode")
@@ -42,6 +49,19 @@ def main():
             print("[ERROR] Elasticsearch недоступен")
             return
         documents = []  # В ES-режиме документы в память не грузим
+
+    # --------------------------------------------
+    # АВТОПОДХВАТ ФАЙЛА ВОПРОСОВ (без --questions)
+    # --------------------------------------------
+    # Если пользователь не передал --questions, но есть data/questions_autogen.json
+    # то используем его автоматически.
+    if not getattr(args, "questions", None):
+        if DEFAULT_QUESTIONS_PATH.exists():
+            args.questions = str(DEFAULT_QUESTIONS_PATH)
+            print(f"\n[QUESTIONS] --questions не задан. Используем по умолчанию: {args.questions}")
+        else:
+            print("\n[QUESTIONS] --questions не задан и файла data/questions_autogen.json нет.")
+            print("[QUESTIONS] Будем пытаться извлечь Q/A из источника (ES или локальные документы).")
 
     # Создаем evaluator
     evaluator = RAGEvaluator(
@@ -62,7 +82,6 @@ def main():
         extract_qa=args.extract_qa,
         es_index=args.es_index,
     )
-
 
     if result:
         print("\nТестирование успешно завершено!")
