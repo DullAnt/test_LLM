@@ -113,7 +113,7 @@ def generate_html_report(
                 </div>
                 <div class="stat-card">
                     <div class="stat-val">{avg_similarity:.1%}</div>
-                    <div class="stat-label">Средняя схожесть</div>
+                    <div class="stat-label">Cхожесть</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-val">{max_rag_quality:.1%}</div>
