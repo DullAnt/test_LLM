@@ -22,8 +22,6 @@ class RagDocument(BaseModel):
 class RagAskResponse(BaseModel):
     answer: str
     docs: List[RagDocument]
-    debug: bool = True
-
 
 class HealthResponse(BaseModel):
     ok: bool
