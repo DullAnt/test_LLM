@@ -36,6 +36,8 @@ data/reports/*.json
 data/testsets/*_extracted_*.jsonl
 data/testsets/questions_*.jsonl
 
+data/testsets
+data/questions_
 # Примеры НЕ игнорируем
 !data/testsets/example_*.jsonl
 
