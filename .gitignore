@@ -1,64 +1,69 @@
 # ==========================================
-# Python
+# Python & System
 # ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.DS_Store
+Thumbs.db
 
+# ==========================================
 # Virtual environments
+# ==========================================
 venv/
 env/
 ENV/
 .venv
 
-# IDE
+# ==========================================
+# IDE Settings
+# ==========================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
 
 # ==========================================
-# Проект TEST_LLM
+# Environment Variables (CRITICAL)
 # ==========================================
-
-# Environment variables
 .env
 .env.local
 
-# Data files - REPORTS (игнорируем)
-data/reports/*.html
-data/reports/*.json
-
-# Data files - TESTSETS (игнорируем извлеченные)
-data/testsets/*_extracted_*.jsonl
-data/testsets/questions_*.jsonl
-
-data/testsets
-data/questions_
-# Примеры НЕ игнорируем
-!data/testsets/example_*.jsonl
-
-# Можно раскомментировать если не хотите коммитить документы
-data/documents/*.md
-data/documents/*.txt
-
 # ==========================================
-# Docker
+# Docker & Logs
 # ==========================================
 docker-compose.override.yml
 volumes/
-
-# ==========================================
-# Logs
-# ==========================================
 *.log
 logs/
 
 # ==========================================
-# OS
+# DATA FILES (Настройка папок)
 # ==========================================
-Thumbs.db
-.DS_Store
+
+# 1. DOCUMENTS
+# Игнорируем всё внутри documents...
+data/documents/*
+# ...НО оставляем файл .gitkeep (чтобы папка осталась в репозитории)
+!data/documents/.gitkeep
+
+# 2. QUESTIONS
+# Игнорируем все сгенерированные вопросы...
+data/questions/*
+# ...НО оставляем .gitkeep
+!data/questions/.gitkeep
+
+# 3. REPORTS
+# Игнорируем отчеты...
+data/reports/*
+# ...НО оставляем .gitkeep
+!data/reports/.gitkeep
+
+# 4. TESTSETS (Старые настройки)
+data/testsets/*_extracted_*.jsonl
+data/testsets/questions_*.jsonl
+# Если хотите игнорировать папку целиком, но оставить примеры:
+# data/testsets/*
+# !data/testsets/example_*.jsonl
