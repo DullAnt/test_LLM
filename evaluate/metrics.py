@@ -1,12 +1,10 @@
-# evaluate/metrics.py
 """
-Модуль для генерации метрик и HTML отчетов
+Module for generating HTML reports (Full Analytics + Details)
 """
 
 from datetime import datetime
 from typing import List, Dict
 from collections import Counter
-
 
 def generate_html_report(
     results: List[Dict],
@@ -15,565 +13,280 @@ def generate_html_report(
     model_name: str = "llama3",
     top_k: int = 5
 ):
-    """Генерация HTML отчета с RAG аналитикой"""
-
     total = len(results)
     correct = sum(1 for r in results if r.get("is_correct", False))
-    incorrect = total - correct
-    accuracy = (correct / total * 100) if total > 0 else 0.0
-    avg_similarity = (sum(r.get("similarity", 0.0) for r in results) / total) if total > 0 else 0.0
+    accuracy = (correct / total * 100) if total else 0.0
+    
+    avg_similarity = (
+        sum(r.get("similarity", 0.0) for r in results) / total if total else 0.0
+    )
+    
+    # --- MODIFIED LOGIC: Calculate MAX retrieval quality for the top card ---
+    max_rag_quality = (
+        max(r.get("retrieval_quality", 0.0) for r in results) if results else 0.0
+    )
 
-    # =============================================================================
-    #  RAG: собираем ВСЕ чанки (это и есть top_k отображение)
-    # =============================================================================
-    all_chunks = []          # плоский список всех чанков по всем вопросам
-    all_sources_used = []    # источники по всем чанкам
-
-    # =============================================================================
-    #  RAG: отдельно собираем ЛУЧШИЙ чанк на вопрос (summary)
-    # =============================================================================
-    best_scores = []
-    best_sources_used = []
-    best_chunks = []         # 1 строка на вопрос (лучший)
-    best_chunk_map = {}      # question_index -> best_chunk (опционально)
-
-    for qi, r in enumerate(results, start=1):
-        # все чанки по вопросу
-        chunks = r.get("retrieved_chunks") or []
-        for c in chunks:
-            all_chunks.append({
-                "question_index": qi,
-                "question": r.get("question", ""),
-                "chunk": c,
-            })
-            all_sources_used.append(c.get("source", "unknown") or "unknown")
-
-        # лучший чанк по вопросу (если есть)
-        best_chunk = r.get("best_chunk")
-        best_score = float(r.get("best_chunk_score", 0.0) or 0.0)
-        if best_chunk:
-            best_scores.append(best_score)
-            best_sources_used.append(best_chunk.get("source", "unknown") or "unknown")
-            best_chunks.append({
-                "question_index": qi,
-                "question": r.get("question", ""),
-                "chunk": best_chunk,
-                "score": best_score,
-            })
-            best_chunk_map[qi] = best_chunk
-
-    # =============================================================================
-    # Метрики качества RAG:
-    # - "Качество RAG" считаем по лучшему чанку на вопрос (как summary-оценка)
-    # - Но отображаем ВСЕ чанки
-    # =============================================================================
-    avg_best_score = (sum(best_scores) / len(best_scores)) if best_scores else 0.0
-
-    # статистика по источникам:
-    source_stats_all = Counter(all_sources_used)
-    source_stats_best = Counter(best_sources_used)
-
-    # распределение качества по ВСЕМ чанкам (это честнее, раз ты хочешь видеть всё)
-    all_scores = [float(x["chunk"].get("score", 0.0) or 0.0) for x in all_chunks]
-    high_quality_all = sum(1 for s in all_scores if s >= 0.7)
-    medium_quality_all = sum(1 for s in all_scores if 0.5 <= s < 0.7)
-    low_quality_all = sum(1 for s in all_scores if s < 0.5)
-
-    # распределение качества по ЛУЧШИМ (как доп. сводка)
-    high_quality_best = sum(1 for s in best_scores if s >= 0.7)
-    medium_quality_best = sum(1 for s in best_scores if 0.5 <= s < 0.7)
-    low_quality_best = sum(1 for s in best_scores if s < 0.5)
-
-    html = f"""<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TEST_LLM Report</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 30px;
-            min-height: 100vh;
-        }}
-        .container {{
-            max-width: 1900px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }}
-        .header {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 50px 40px;
-            text-align: center;
-        }}
-        .header h1 {{
-            font-size: 3em;
-            margin-bottom: 15px;
-            font-weight: 800;
-            text-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-        }}
-        .stats {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            padding: 40px;
-            background: #f8f9fa;
-        }}
-        .stat-card {{
-            background: white;
-            padding: 25px;
-            border-radius: 16px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            text-align: center;
-            transition: transform 0.3s ease;
-        }}
-        .stat-card:hover {{
-            transform: translateY(-5px);
-        }}
-        .stat-value {{
-            font-size: 2.5em;
-            font-weight: 800;
-            margin: 10px 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }}
-        .stat-label {{
-            color: #666;
-            font-size: 0.9em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 600;
-        }}
-        .section {{
-            padding: 40px;
-            border-bottom: 1px solid #e5e7eb;
-        }}
-        .section h2 {{
-            font-size: 2em;
-            margin-bottom: 30px;
-            color: #333;
-            font-weight: 700;
-            border-left: 5px solid #667eea;
-            padding-left: 15px;
-        }}
-        .rag-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 25px;
-            margin-top: 20px;
-        }}
-        .rag-card {{
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 12px;
-            border: 2px solid #e5e7eb;
-        }}
-        .rag-card h3 {{
-            color: #667eea;
-            font-size: 1.2em;
-            margin-bottom: 15px;
-            font-weight: 700;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            margin-top: 20px;
-        }}
-        thead {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }}
-        th {{
-            padding: 18px;
-            text-align: left;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85em;
-            letter-spacing: 1px;
-        }}
-        td {{
-            padding: 15px;
-            border-bottom: 1px solid #e5e7eb;
-            vertical-align: top;
-        }}
-        tr:hover {{
-            background: #f9fafb;
-        }}
-        tr:last-child td {{
-            border-bottom: none;
-        }}
-        .bar {{
-            height: 28px;
-            background: #e5e7eb;
-            border-radius: 14px;
-            overflow: hidden;
-            position: relative;
-            min-width: 100px;
-        }}
-        .bar-fill {{
-            height: 100%;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75em;
-            font-weight: 700;
-            color: white;
-        }}
-        .bar-high {{ background: linear-gradient(90deg, #10b981 0%, #059669 100%); }}
-        .bar-medium {{ background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%); }}
-        .bar-low {{ background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%); }}
-        .chunk-source {{
-            color: #7c3aed;
-            font-weight: 600;
-        }}
-        .progress-bar {{
-            width: 100%;
-            height: 30px;
-            background: #e5e7eb;
-            border-radius: 15px;
-            overflow: hidden;
-            margin: 10px 0;
-        }}
-        .progress-segment {{
-            height: 100%;
-            float: left;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.75em;
-            font-weight: 700;
-            color: white;
-            padding: 0 5px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }}
-        .footer {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-            font-size: 0.95em;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>TEST_LLM Report</h1>
-            <p style="font-size: 1.2em; margin-top: 10px;">{datetime.now().strftime('%d.%m.%Y %H:%M:%S')}</p>
-            <p style="margin-top: 15px; opacity: 0.9;">Модель: {model_name} | TOP_K: {top_k} | Порог: {threshold:.0%}</p>
-        </div>
-
-        <div class="stats">
-            <div class="stat-card">
-                <div class="stat-label">Всего вопросов</div>
-                <div class="stat-value">{total}</div>
+    # --- Analytics Calculation ---
+    all_chunks = []
+    for r in results:
+        all_chunks.extend(r.get("retrieved_chunks", []))
+    
+    total_chunks = len(all_chunks)
+    unique_sources = Counter(c.get("source", "unknown") for c in all_chunks)
+    avg_chunk_score = sum(c.get("score", 0) for c in all_chunks) / total_chunks if total_chunks else 0.0
+    
+    # Chunk Quality Distribution
+    high_qual = sum(1 for c in all_chunks if c.get("score", 0) >= 0.7)
+    med_qual = sum(1 for c in all_chunks if 0.5 <= c.get("score", 0) < 0.7)
+    low_qual = sum(1 for c in all_chunks if c.get("score", 0) < 0.5)
+    
+    # HTML Start
+    html_head = f"""
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <title>TEST_LLM Report</title>
+        <style>
+            body {{ font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: #f4f6f9; padding: 20px; color: #333; margin: 0; }}
+            .container {{ max-width: 1400px; margin: 0 auto; background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); overflow: hidden; }}
+            .header {{ background: linear-gradient(135deg, #6b73ff 0%, #000dff 100%); padding: 40px; color: white; text-align: center; }}
+            .header h1 {{ margin: 0; font-size: 32px; font-weight: 700; }}
+            .header p {{ margin: 10px 0 0; opacity: 0.8; font-size: 14px; }}
+            .stats-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; padding: 30px 40px; border-bottom: 1px solid #eee; }}
+            .stat-card {{ background: #fff; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #edf2f7; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }}
+            .stat-val {{ font-size: 28px; font-weight: 800; color: #5a67d8; margin-bottom: 5px; }}
+            .stat-label {{ color: #718096; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }}
+            .analytics-section {{ padding: 30px 40px; background: #f8f9fa; border-bottom: 1px solid #eee; }}
+            .analytics-title {{ font-size: 20px; font-weight: 700; color: #2d3748; margin-bottom: 20px; border-left: 4px solid #5a67d8; padding-left: 15px; }}
+            .analytics-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }}
+            .analytics-card {{ background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }}
+            .ac-title {{ font-size: 14px; font-weight: 600; color: #5a67d8; margin-bottom: 15px; text-transform: uppercase; }}
+            .stat-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f7fafc; font-size: 13px; }}
+            .stat-row:last-child {{ border: none; }}
+            .progress-bar {{ height: 24px; background: #edf2f7; border-radius: 12px; overflow: hidden; display: flex; margin-bottom: 10px; }}
+            .pb-segment {{ height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 700; }}
+            .chunk-table-wrapper {{ padding: 30px 40px; background: #fff; }}
+            .chunk-table {{ width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }}
+            .chunk-table th {{ background: #5a67d8; color: white; padding: 12px 15px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }}
+            .chunk-table td {{ padding: 12px 15px; border-bottom: 1px solid #edf2f7; font-size: 13px; color: #4a5568; vertical-align: top; }}
+            .chunk-table tr:last-child td {{ border-bottom: none; }}
+            .chunk-table tr:nth-child(even) {{ background: #fcfcfc; }}
+            .score-badge {{ padding: 4px 10px; border-radius: 12px; color: white; font-weight: 700; font-size: 11px; display: inline-block; }}
+            .bg-high {{ background: #10b981; }}
+            .bg-med {{ background: #f59e0b; }}
+            .bg-low {{ background: #ef4444; }}
+            .results-section {{ padding: 30px 40px; }}
+            .results-table-main {{ width: 100%; border-collapse: separate; border-spacing: 0; }}
+            .results-table-main th {{ background: #fff; padding: 15px; text-align: left; font-size: 12px; color: #a0aec0; text-transform: uppercase; border-bottom: 2px solid #edf2f7; }}
+            .results-table-main td {{ padding: 15px; border-bottom: 1px solid #edf2f7; }}
+            .row-main {{ cursor: pointer; transition: background 0.1s; }}
+            .row-main:hover {{ background: #f7fafc; }}
+            .row-details {{ display: none; background: #f8f9fa; }}
+            .details-box {{ padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }}
+            .col-left {{ border-right: 1px solid #e2e8f0; padding-right: 30px; }}
+            .chunk-card {{ background: white; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #5a67d8; }}
+            .answer-box {{ background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 15px; }}
+            .ab-title {{ font-size: 11px; text-transform: uppercase; color: #718096; font-weight: 700; margin-bottom: 8px; }}
+        </style>
+        <script>
+            function toggleRow(id) {{
+                var row = document.getElementById('details-' + id);
+                row.style.display = row.style.display === 'table-row' ? 'none' : 'table-row';
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>RAG Evaluation Report</h1>
+                <p>Generated on: {datetime.now().strftime('%d.%m.%Y %H:%M')}</p>
             </div>
-            <div class="stat-card">
-                <div class="stat-label">Правильных</div>
-                <div class="stat-value">{correct}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Неправильных</div>
-                <div class="stat-value">{incorrect}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Точность</div>
-                <div class="stat-value">{accuracy:.1f}%</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Средняя схожесть</div>
-                <div class="stat-value">{avg_similarity:.1%}</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Качество RAG (по лучшему чанку)</div>
-                <div class="stat-value">{avg_best_score:.1%}</div>
-            </div>
-        </div>
-
-        <div class="section" style="background: #f8f9fa;">
-            <h2>Аналитика работы RAG системы</h2>
-
-            <div class="rag-grid">
-                <div class="rag-card">
-                    <h3>Статистика поиска</h3>
-                    <table style="box-shadow: none;">
-                        <tr>
-                            <td style="border: none;"><strong>Всего chunks найдено:</strong></td>
-                            <td style="border: none;">{len(all_chunks)}</td>
-                        </tr>
-                        <tr>
-                            <td style="border: none;"><strong>Chunks на вопрос:</strong></td>
-                            <td style="border: none;">{(len(all_chunks) / total) if total > 0 else 0:.1f}</td>
-                        </tr>
-                        <tr>
-                            <td style="border: none;"><strong>Средний best score:</strong></td>
-                            <td style="border: none;">{avg_best_score:.1%}</td>
-                        </tr>
-                        <tr>
-                            <td style="border: none;"><strong>Уникальных источников (все чанки):</strong></td>
-                            <td style="border: none;">{len(source_stats_all)}</td>
-                        </tr>
-                    </table>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-val">{total}</div>
+                    <div class="stat-label">Всего вопросов</div>
                 </div>
-
-                <div class="rag-card">
-                    <h3>Распределение качества (ВСЕ чанки)</h3>
+                <div class="stat-card">
+                    <div class="stat-val">{correct}</div>
+                    <div class="stat-label">Правильных</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val">{avg_similarity:.1%}</div>
+                    <div class="stat-label">Средняя схожесть</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-val">{max_rag_quality:.1%}</div>
+                    <div class="stat-label">Качество RAG</div>
+                </div>
+            </div>
+        <!-- ANALYTICS SECTION -->
+        <div class="analytics-section">
+            <div class="analytics-title">Аналитика работы RAG системы</div>
+            <div class="analytics-grid">
+                <!-- Search Stats -->
+                <div class="analytics-card">
+                    <div class="ac-title">Статистика поиска</div>
+                    <div class="stat-row"><span>Всего chunks найдено:</span> <b>{total_chunks}</b></div>
+                    <div class="stat-row"><span>Chunks на вопрос:</span> <b>{total_chunks / total if total else 0:.1f}</b></div>
+                    <div class="stat-row"><span>Средний score:</span> <b>{avg_chunk_score:.1%}</b></div>
+                    <div class="stat-row"><span>Уникальных источников:</span> <b>{len(unique_sources)}</b></div>
+                </div>
+                
+                <!-- Quality Distribution -->
+                <div class="analytics-card">
+                    <div class="ac-title">Распределение качества chunks</div>
                     <div class="progress-bar">
-                        <div class="progress-segment bar-high" style="width: {(high_quality_all / len(all_scores) * 100) if all_scores else 0}%; background: linear-gradient(90deg, #10b981 0%, #059669 100%);">
-                            {high_quality_all} высокое (≥70%)
-                        </div>
-                        <div class="progress-segment bar-medium" style="width: {(medium_quality_all / len(all_scores) * 100) if all_scores else 0}%; background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);">
-                            {medium_quality_all} среднее (50-70%)
-                        </div>
-                        <div class="progress-segment bar-low" style="width: {(low_quality_all / len(all_scores) * 100) if all_scores else 0}%; background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);">
-                            {low_quality_all} низкое (&lt;50%)
-                        </div>
+                        <div class="pb-segment bg-high" style="width: {(high_qual/total_chunks*100) if total_chunks else 0}%;"></div>
+                        <div class="pb-segment bg-med" style="width: {(med_qual/total_chunks*100) if total_chunks else 0}%;"></div>
+                        <div class="pb-segment bg-low" style="width: {(low_qual/total_chunks*100) if total_chunks else 0}%;"></div>
                     </div>
-                    <p style="margin-top: 15px; font-size: 0.85em; color: #666;">
-                        Высокое качество: {(high_quality_all / len(all_scores) * 100) if all_scores else 0:.1f}%<br>
-                        Среднее качество: {(medium_quality_all / len(all_scores) * 100) if all_scores else 0:.1f}%<br>
-                        Низкое качество: {(low_quality_all / len(all_scores) * 100) if all_scores else 0:.1f}%
-                    </p>
+                    <div class="stat-row"><span>Высокое (≥70%):</span> <b>{high_qual}</b></div>
+                    <div class="stat-row"><span>Среднее (50-70%):</span> <b>{med_qual}</b></div>
+                    <div class="stat-row"><span>Низкое (&lt;50%):</span> <b>{low_qual}</b></div>
                 </div>
-
-                <div class="rag-card">
-                    <h3>Использование источников (ВСЕ чанки)</h3>
-                    <div style="max-height: 300px; overflow-y: auto;">
+                
+                <!-- Sources -->
+                <div class="analytics-card">
+                    <div class="ac-title">Использование источников</div>
+                    <div style="max-height: 120px; overflow-y: auto;">
 """
-
-    # Источники по ВСЕМ чанкам
-    for source, count in source_stats_all.most_common():
-        percentage = (count / len(all_chunks) * 100) if all_chunks else 0
-        html += f"""
-                        <div style="margin: 10px 0;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                                <span style="font-weight: 600; font-size: 0.9em;">{source}</span>
-                                <span style="color: #667eea; font-weight: 700;">{count} ({percentage:.1f}%)</span>
+    # Добавляем источники
+    for src, count in unique_sources.most_common(5):
+        perc = (count / total_chunks * 100) if total_chunks else 0
+        html_head += f"""
+                        <div style="margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; font-size:12px;">
+                                <span>{src[:25]}...</span> <b>{count} ({perc:.0f}%)</b>
                             </div>
-                            <div class="bar">
-                                <div class="bar-fill bar-high" style="width: {percentage}%;"></div>
+                            <div style="height:4px; background:#edf2f7; border-radius:2px; overflow:hidden;">
+                                <div style="height:100%; background:#5a67d8; width:{perc}%;"></div>
                             </div>
                         </div>
-"""
-
-    html += """
+        """
+    
+    html_head += """
                     </div>
                 </div>
             </div>
-
-            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #667eea; font-size: 1.5em;">
-                Детальная таблица ВСЕХ найденных chunks (TOP_K на вопрос)
-            </h3>
-            <table>
+        </div>
+        <!-- DETAILED CHUNKS TABLE -->
+        <div class="chunk-table-wrapper">
+            <h3 style="color:#5a67d8; margin-top:0;">Детальная таблица всех найденных chunks</h3>
+            <table class="chunk-table">
                 <thead>
                     <tr>
-                        <th style="width: 60px;">#</th>
-                        <th style="width: 14%;">Вопрос</th>
-                        <th style="width: 80px;">Ранг</th>
-                        <th style="width: 15%;">Источник</th>
-                        <th style="width: 110px;">Score</th>
-                        <th>Найденный chunk</th>
+                        <th style="width:40px;">#</th>
+                        <th>Вопрос</th>
+                        <th style="width:60px;">Ранг</th>
+                        <th>Источник</th>
+                        <th style="width:80px;">Score</th>
+                        <th>Найденный Chunk</th>
                     </tr>
                 </thead>
                 <tbody>
 """
-
-    # Таблица ВСЕХ чанков
-    row_id = 1
-    for row in all_chunks:
-        qi = row.get("question_index", 0)
-        q_full = row.get("question", "") or ""
-        question = (q_full[:50] + "...") if len(q_full) > 50 else q_full
-
-        chunk = row.get("chunk") or {}
-        chunk_text_full = chunk.get("text", "") or ""
-        chunk_text = chunk_text_full[:200] + ("..." if len(chunk_text_full) > 200 else "")
-        chunk_text = chunk_text.replace("<", "&lt;").replace(">", "&gt;")
-
-        chunk_source = chunk.get("source", "unknown") or "unknown"
-        chunk_score = float(chunk.get("score", 0.0) or 0.0)
-        chunk_rank = int(chunk.get("rank", 0) or 0)
-
-        if chunk_score >= 0.7:
-            bar_class = "bar-high"
-        elif chunk_score >= 0.5:
-            bar_class = "bar-medium"
-        else:
-            bar_class = "bar-low"
-
-        html += f"""
+    # Генерируем строки таблицы чанков
+    chunk_row_idx = 1
+    for r in results:
+        q_text = r.get("question", "")[:50] + "..."
+        chunks = r.get("retrieved_chunks", [])
+        
+        for idx, c in enumerate(chunks, 1): 
+            score = c.get("score", 0)
+            badge_cls = "bg-high" if score >= 0.7 else ("bg-med" if score >= 0.5 else "bg-low")
+            
+            html_head += f"""
                     <tr>
-                        <td><strong>{row_id}</strong></td>
-                        <td style="font-size: 0.85em; color: #666;">Q{qi}: {question}</td>
-                        <td style="text-align: center;"><strong>#{chunk_rank}</strong></td>
-                        <td><span class="chunk-source">{chunk_source}</span></td>
-                        <td>
-                            <div class="bar">
-                                <div class="bar-fill {bar_class}" style="width: {chunk_score * 100}%; ">
-                                    {chunk_score:.1%}
-                                </div>
-                            </div>
-                        </td>
-                        <td style="font-size: 0.85em;">{chunk_text}</td>
+                        <td>{chunk_row_idx}</td>
+                        <td style="font-size:12px; color:#718096;">Q{results.index(r)+1}: {q_text}</td>
+                        <td style="text-align:center;"><b>#{idx}</b></td>
+                        <td style="color:#5a67d8;">{c.get('source', 'unknown')}</td>
+                        <td><span class="score-badge {badge_cls}">{score:.1%}</span></td>
+                        <td style="font-size:12px;">{c.get('text', '')[:150]}...</td>
                     </tr>
-"""
-        row_id += 1
-
-    # Оставим как summary таблицу лучших (по желанию)
-    html += """
-                </tbody>
-            </table>
-
-            <h3 style="margin-top: 40px; margin-bottom: 20px; color: #667eea; font-size: 1.5em;">
-                Детальная таблица ЛУЧШИХ chunks (по 1 на вопрос)
-            </h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th style="width: 60px;">#</th>
-                        <th style="width: 22%;">Вопрос</th>
-                        <th style="width: 80px;">Ранг</th>
-                        <th style="width: 18%;">Источник</th>
-                        <th style="width: 110px;">Score</th>
-                        <th>Найденный chunk</th>
-                    </tr>
-                </thead>
-                <tbody>
-"""
-
-    for i, row in enumerate(best_chunks, 1):
-        qi = row.get("question_index", 0)
-        q_full = row.get("question", "") or ""
-        question = (q_full[:50] + "...") if len(q_full) > 50 else q_full
-
-        chunk = row.get("chunk", {}) or {}
-        chunk_text_full = chunk.get("text", "") or ""
-        chunk_text = chunk_text_full[:200] + ("..." if len(chunk_text_full) > 200 else "")
-        chunk_text = chunk_text.replace("<", "&lt;").replace(">", "&gt;")
-
-        chunk_source = chunk.get("source", "unknown") or "unknown"
-        chunk_score = float(row.get("score", 0.0) or 0.0)
-        chunk_rank = int(chunk.get("rank", 0) or 0)
-
-        if chunk_score >= 0.7:
-            bar_class = "bar-high"
-        elif chunk_score >= 0.5:
-            bar_class = "bar-medium"
-        else:
-            bar_class = "bar-low"
-
-        html += f"""
-                    <tr>
-                        <td><strong>{i}</strong></td>
-                        <td style="font-size: 0.85em; color: #666;">Q{qi}: {question}</td>
-                        <td style="text-align: center;"><strong>#{chunk_rank}</strong></td>
-                        <td><span class="chunk-source">{chunk_source}</span></td>
-                        <td>
-                            <div class="bar">
-                                <div class="bar-fill {bar_class}" style="width: {chunk_score * 100}%; ">
-                                    {chunk_score:.1%}
-                                </div>
-                            </div>
-                        </td>
-                        <td style="font-size: 0.85em;">{chunk_text}</td>
-                    </tr>
-"""
-
-    # Блок "Детальные результаты" оставим как есть (с твоей упрощённой версткой)
-    html += """
+            """
+            chunk_row_idx += 1
+    html_head += """
                 </tbody>
             </table>
         </div>
-
-        <div class="section">
-            <h2>Детальные результаты</h2>
-            <table>
+        <!-- MAIN RESULTS ACCORDION -->
+        <div class="results-section">
+            <h3 style="color:#2d3748;">Детальные результаты</h3>
+            <table class="results-table-main">
                 <thead>
                     <tr>
-                        <th style="width: 40px;">#</th>
-                        <th style="width: 25%;">Вопрос</th>
-                        <th style="width: 120px;">Результат</th>
-                        <th style="width: 120px;">Схожесть</th>
-                        <th>Сравнение</th>
+                        <th style="width:50px;">#</th>
+                        <th>Вопрос</th>
+                        <th style="width:100px;">Результат</th>
+                        <th style="width:100px;">Схожесть</th>
                     </tr>
                 </thead>
                 <tbody>
 """
-
-    for i, result in enumerate(results, 1):
-        question = (result.get("question", "") or "").replace("<", "&lt;").replace(">", "&gt;")
-        is_correct = bool(result.get("is_correct", False))
-        similarity = float(result.get("similarity", 0.0) or 0.0)
-
-        generated = (result.get("generated_answer", "") or "").replace("<", "&lt;").replace(">", "&gt;")
-        expected = (result.get("expected_answer", "") or "").replace("<", "&lt;").replace(">", "&gt;")
-
-        status_text = "Правильно" if is_correct else "Неправильно"
-
-        if similarity >= 0.7:
-            bar_class = "bar-high"
-        elif similarity >= 0.5:
-            bar_class = "bar-medium"
-        else:
-            bar_class = "bar-low"
-
-        similarity_percent = similarity * 100
-
-        html += f"""
-                    <tr>
-                        <td><strong>{i}</strong></td>
-                        <td>{question}</td>
-                        <td>{status_text}</td>
-                        <td>
-                            <div class="bar">
-                                <div class="bar-fill {bar_class}" style="width: {similarity_percent}%; ">
-                                    {similarity:.1%}
-                                </div>
+    
+    html_rows = ""
+    for i, r in enumerate(results, 1):
+        status_cls = "bg-high" if r.get("is_correct") else "bg-low"
+        status_text = "Правильно" if r.get("is_correct") else "Ошибка"
+        sim = r.get("similarity", 0.0)
+        
+        # Чанки для левой колонки
+        chunks_html = ""
+        for idx, c in enumerate(r.get("retrieved_chunks", []), 1):
+            chunks_html += f"""
+            <div class="chunk-card">
+                <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px; color:#718096;">
+                    <b>#{idx} {c.get('source')}</b>
+                    <span>{c.get('score', 0):.4f}</span>
+                </div>
+                <div style="font-size:12px;">{c.get('text', '')[:300]}...</div>
+            </div>
+            """
+        html_rows += f"""
+            <tr class="row-main" onclick="toggleRow({i})">
+                <td>{i}</td>
+                <td style="font-weight:600;">{r.get("question")}</td>
+                <td><span class="score-badge {status_cls}">{status_text}</span></td>
+                <td><b>{sim:.1%}</b></td>
+            </tr>
+            <tr id="details-{i}" class="row-details">
+                <td colspan="4" style="padding:0;">
+                    <div class="details-box">
+                        <div class="col-left">
+                            <h4 style="color:#5a67d8; margin-top:0;">RAG Context (Top-{top_k})</h4>
+                            {chunks_html}
+                        </div>
+                        <div class="col-right">
+                            <div class="answer-box" style="border-left: 4px solid #10b981; background:#f0fff4;">
+                                <div class="ab-title">Ожидаемый ответ</div>
+                                <div>{r.get("expected_answer")}</div>
                             </div>
-                        </td>
-                        <td>
-                            <div style="padding: 10px; background: #f0fdf4; margin-bottom: 8px; border-left: 4px solid #10b981;">
-                                <strong>Ожидаемый:</strong><br>{expected[:200]}{'...' if len(expected) > 200 else ''}
+                            <div class="answer-box" style="border-left: 4px solid #ed8936; background:#fffaf0;">
+                                <div class="ab-title">Ответ системы</div>
+                                <div>{r.get("generated_answer")}</div>
                             </div>
-                            <div style="padding: 10px; background: #fef3c7; border-left: 4px solid #f59e0b;">
-                                <strong>Сгенерированный:</strong><br>{generated[:200]}{'...' if len(generated) > 200 else ''}
+                            <div style="margin-top:10px; font-size:12px; color:#a0aec0;">
+                                Reference Retrieval Quality: <b>{r.get('retrieval_quality', 0):.1%}</b>
                             </div>
-                        </td>
-                    </tr>
-"""
-
-    html += """
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        """
+    html_end = """
                 </tbody>
             </table>
-        </div>
-
-        <div class="footer">
-            <p style="font-size: 1.1em; font-weight: 600;">TEST_LLM - Система тестирования LLM</p>
-            <p style="margin-top: 10px; opacity: 0.9;">Векторный поиск + Косинусное сходство</p>
         </div>
     </div>
 </body>
 </html>
 """
+    full_html = html_head + html_rows + html_end
+    
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(full_html)
+    
+    print(f"[SUCCESS] Report saved: {output_path}")
 
-    try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(html)
-        print(f"[SUCCESS] HTML отчет сохранен: {output_path}")
-    except Exception as e:
-        print(f"[FAIL] Ошибка при сохранении: {e}")

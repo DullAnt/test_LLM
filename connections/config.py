@@ -22,14 +22,14 @@ EMBEDDING_MODELS = {
     "intfloat/multilingual-e5-small": {"dims": 384, "size": "470MB", "quality": "good"},
 }
 
-DEFAULT_DEVICE = os.getenv("DEVICE", "cpu")
+DEFAULT_DEVICE = os.getenv("DEVICE", "cuda")
 QUESTIONS_AUTOGEN_PATH = "data/questions_autogen.json"
 
 # =============================================================================
 # OLLAMA
 # =============================================================================
 
-DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma2:2b")
+DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:2b")
 DEFAULT_OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 DEFAULT_OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "600"))
 
@@ -50,7 +50,7 @@ ELASTIC_API_KEY = os.getenv("ELASTIC_API_KEY")
 # EMBEDDINGS
 # =============================================================================
 
-DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-large")
+DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-base")
 DEFAULT_EMBEDDING_DIMS = int(
     os.getenv(
         "EMBEDDING_DIMS",
@@ -72,6 +72,7 @@ DEFAULT_SIMILARITY_THRESHOLD = float(os.getenv("SIMILARITY_THRESHOLD", "0.7"))
 DEFAULT_DOCUMENTS_PATH = os.getenv("DOCUMENTS_PATH", "data/documents")
 DEFAULT_TESTSETS_PATH = os.getenv("TESTSETS_PATH", "data/testsets")
 DEFAULT_REPORTS_PATH = os.getenv("REPORTS_PATH", "data/reports")
+DEFAULT_QUESTIONS_PATH = os.getenv("QUESTIONS_PATH", "data/questions/questions_autogen.json")
 
 # =============================================================================
 # UNIFIED CONFIG CLASS
@@ -84,7 +85,7 @@ class Config:
     OLLAMA_HOST = DEFAULT_OLLAMA_HOST
     OLLAMA_MODEL = DEFAULT_OLLAMA_MODEL
     OLLAMA_TIMEOUT = DEFAULT_OLLAMA_TIMEOUT
-
+    DEVICE = DEFAULT_DEVICE
     # Embeddings
     EMBEDDING_MODEL = DEFAULT_EMBEDDING_MODEL
     EMBEDDING_DIMS = DEFAULT_EMBEDDING_DIMS
@@ -105,7 +106,7 @@ class Config:
     DOCUMENTS_PATH = DEFAULT_DOCUMENTS_PATH
     TESTSETS_PATH = DEFAULT_TESTSETS_PATH
     REPORTS_PATH = DEFAULT_REPORTS_PATH
-
+    QUESTIONS_PATH = DEFAULT_QUESTIONS_PATH
 
 __all__ = [
     "EMBEDDING_MODELS",
@@ -122,4 +123,6 @@ __all__ = [
     "DEFAULT_TOP_K",
     "DEFAULT_NEED_HYDE",
     "DEFAULT_SIMILARITY_THRESHOLD",
+    "DEFAULT_DEVICE",
+    "DEFAULT_QUESTIONS_PATH"
 ]

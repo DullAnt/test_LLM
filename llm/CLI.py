@@ -16,7 +16,8 @@ from connections.config import (
     DEFAULT_ELASTIC_PORT,
     DEFAULT_ELASTIC_INDEX,
     DEFAULT_SIMILARITY_THRESHOLD,
-    DEFAULT_TOP_K
+    DEFAULT_TOP_K,
+    DEFAULT_NEED_HYDE
 )
 
 
@@ -103,7 +104,7 @@ def parse_arguments():
         "--no-hyde",
         dest="hyde",
         action="store_false",
-        default=True,
+        default=DEFAULT_NEED_HYDE,
         help="Disable HyDE (enabled by default)"
     )
     

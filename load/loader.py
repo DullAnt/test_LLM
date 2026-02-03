@@ -41,7 +41,7 @@ def ensure_elasticsearch_ready(es_host: str, es_port: int, es_index: str) -> boo
         # Формируем URL из host и port
         es_url = f"http://{es_host}:{es_port}"
         
-        # Создаем клиент с правильными параметрами
+        # Создаем клиент
         es_client = ElasticsearchClient(url=es_url, index_name=es_index)
 
         if not es_client.ping():

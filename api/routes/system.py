@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 
 from api.schemas import HealthResponse, ConfigResponse
 from connections.config import Config
-from api.deps import check_elasticsearch
+from api.ragser import check_elasticsearch
 
 router = APIRouter(tags=["system"])
 
@@ -28,10 +28,3 @@ def get_config() -> ConfigResponse:
         similarity_threshold=Config.SIMILARITY_THRESHOLD,
     )
 
-
-@router.get("/ollama/info")
-def ollama_info(request: Request):
-    rag = getattr(request.app.state, "rag", None)
-    if not rag:
-        return {"connected": False, "error": "RAG service not initialized"}
-    return rag.ollama.get_info()

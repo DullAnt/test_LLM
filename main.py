@@ -11,7 +11,7 @@ from evaluate.evaluator import RAGEvaluator
 from connections.config import Config
 
 
-DEFAULT_QUESTIONS_PATH = Path("data/questions_autogen.json")
+DEFAULT_QUESTIONS_PATH = Path(Config.QUESTIONS_PATH)
 
 
 def main():
@@ -21,19 +21,6 @@ def main():
 
     args = parse_arguments()
     setup_directories()
-
-    if args.head:
-        from package import head
-        print("\n[HEAD] Используются параметры из head.py:")
-        print(f"  top_k: {head.top_k}")
-        print(f"  need_hyde: {head.need_hyde}")
-        print(f"  model: {head.model}")
-        print(f"  embeddings: {head.embeddings}")
-
-        # Переопределяем параметры из head
-        args.top_k = head.top_k
-        args.hyde = head.need_hyde
-        args.model = head.model
 
     # Определяем режим работы
     if args.local_files:
