@@ -53,39 +53,88 @@ def generate_html_report(
             .header {{ background: linear-gradient(135deg, #6b73ff 0%, #000dff 100%); padding: 40px; color: white; text-align: center; }}
             .header h1 {{ margin: 0; font-size: 32px; font-weight: 700; }}
             .header p {{ margin: 10px 0 0; opacity: 0.8; font-size: 14px; }}
+            
             .stats-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; padding: 30px 40px; border-bottom: 1px solid #eee; }}
             .stat-card {{ background: #fff; padding: 20px; border-radius: 12px; text-align: center; border: 1px solid #edf2f7; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }}
             .stat-val {{ font-size: 28px; font-weight: 800; color: #5a67d8; margin-bottom: 5px; }}
             .stat-label {{ color: #718096; font-size: 11px; text-transform: uppercase; font-weight: 700; letter-spacing: 1px; }}
+            
             .analytics-section {{ padding: 30px 40px; background: #f8f9fa; border-bottom: 1px solid #eee; }}
             .analytics-title {{ font-size: 20px; font-weight: 700; color: #2d3748; margin-bottom: 20px; border-left: 4px solid #5a67d8; padding-left: 15px; }}
             .analytics-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }}
             .analytics-card {{ background: white; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0; }}
             .ac-title {{ font-size: 14px; font-weight: 600; color: #5a67d8; margin-bottom: 15px; text-transform: uppercase; }}
+            
             .stat-row {{ display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f7fafc; font-size: 13px; }}
             .stat-row:last-child {{ border: none; }}
+            
             .progress-bar {{ height: 24px; background: #edf2f7; border-radius: 12px; overflow: hidden; display: flex; margin-bottom: 10px; }}
             .pb-segment {{ height: 100%; display: flex; align-items: center; justify-content: center; color: white; font-size: 11px; font-weight: 700; }}
+            
             .chunk-table-wrapper {{ padding: 30px 40px; background: #fff; }}
             .chunk-table {{ width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }}
             .chunk-table th {{ background: #5a67d8; color: white; padding: 12px 15px; text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }}
             .chunk-table td {{ padding: 12px 15px; border-bottom: 1px solid #edf2f7; font-size: 13px; color: #4a5568; vertical-align: top; }}
             .chunk-table tr:last-child td {{ border-bottom: none; }}
             .chunk-table tr:nth-child(even) {{ background: #fcfcfc; }}
+            
             .score-badge {{ padding: 4px 10px; border-radius: 12px; color: white; font-weight: 700; font-size: 11px; display: inline-block; }}
             .bg-high {{ background: #10b981; }}
             .bg-med {{ background: #f59e0b; }}
             .bg-low {{ background: #ef4444; }}
+            
             .results-section {{ padding: 30px 40px; }}
             .results-table-main {{ width: 100%; border-collapse: separate; border-spacing: 0; }}
             .results-table-main th {{ background: #fff; padding: 15px; text-align: left; font-size: 12px; color: #a0aec0; text-transform: uppercase; border-bottom: 2px solid #edf2f7; }}
             .results-table-main td {{ padding: 15px; border-bottom: 1px solid #edf2f7; }}
+            
             .row-main {{ cursor: pointer; transition: background 0.1s; }}
             .row-main:hover {{ background: #f7fafc; }}
+            
             .row-details {{ display: none; background: #f8f9fa; }}
             .details-box {{ padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }}
+            
             .col-left {{ border-right: 1px solid #e2e8f0; padding-right: 30px; }}
-            .chunk-card {{ background: white; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 3px solid #5a67d8; }}
+            .chunk-card {{ background: white; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; margin-bottom: 15px; border-left: 3px solid #5a67d8; }}
+            
+            /* --- СТИЛЬ ДЛЯ БЛОКА ТЕКСТА (Окошко со скроллом) --- */
+            .chunk-text-box {{
+                /* Фиксированная максимальная высота. Текст внутри будет скроллиться */
+                max-height: 180px; 
+                overflow-y: auto; 
+                
+                /* Визуальное оформление "блока кода" */
+                background-color: #f1f5f9; 
+                border: 1px solid #e2e8f0;
+                border-radius: 6px;
+                padding: 10px;
+                margin-top: 8px;
+                
+                /* Шрифт и форматирование */
+                font-family: Consolas, Monaco, 'Andale Mono', monospace; 
+                font-size: 12px;
+                line-height: 1.5;
+                color: #334155;
+                white-space: pre-wrap; /* Сохраняем переносы строк и абзацы */
+                word-wrap: break-word; /* Переносим длинные слова */
+            }}
+            
+            /* Кастомный скроллбар для красоты */
+            .chunk-text-box::-webkit-scrollbar {{ width: 8px; }}
+            .chunk-text-box::-webkit-scrollbar-track {{ background: #e2e8f0; border-radius: 4px; }}
+            .chunk-text-box::-webkit-scrollbar-thumb {{ background: #94a3b8; border-radius: 4px; }}
+            .chunk-text-box::-webkit-scrollbar-thumb:hover {{ background: #64748b; }}
+            
+            /* Общий контейнер, если чанков очень много */
+            .chunks-scroll-container {{
+                max-height: 800px;
+                overflow-y: auto;
+                padding-right: 10px;
+            }}
+            .chunks-scroll-container::-webkit-scrollbar {{ width: 8px; }}
+            .chunks-scroll-container::-webkit-scrollbar-track {{ background: #edf2f7; }}
+            .chunks-scroll-container::-webkit-scrollbar-thumb {{ background: #cbd5e0; border-radius: 4px; }}
+            
             .answer-box {{ background: white; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; margin-bottom: 15px; }}
             .ab-title {{ font-size: 11px; text-transform: uppercase; color: #718096; font-weight: 700; margin-bottom: 8px; }}
         </style>
@@ -113,7 +162,7 @@ def generate_html_report(
                 </div>
                 <div class="stat-card">
                     <div class="stat-val">{avg_similarity:.1%}</div>
-                    <div class="stat-label">Cхожесть</div>
+                    <div class="stat-label">Средняя схожесть</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-val">{max_rag_quality:.1%}</div>
@@ -241,9 +290,11 @@ def generate_html_report(
                     <b>#{idx} {c.get('source')}</b>
                     <span>{c.get('score', 0):.4f}</span>
                 </div>
-                <div style="font-size:12px;">{c.get('text', '')[:300]}...</div>
+                <!-- ЗДЕСЬ ПРИМЕНЕН КЛАСС chunk-text-box (Серый блок со скроллом) -->
+                <div class="chunk-text-box">{c.get('text', '')}</div>
             </div>
             """
+        
         html_rows += f"""
             <tr class="row-main" onclick="toggleRow({i})">
                 <td>{i}</td>
@@ -256,7 +307,9 @@ def generate_html_report(
                     <div class="details-box">
                         <div class="col-left">
                             <h4 style="color:#5a67d8; margin-top:0;">RAG Context (Top-{top_k})</h4>
-                            {chunks_html}
+                            <div class="chunks-scroll-container">
+                                {chunks_html}
+                            </div>
                         </div>
                         <div class="col-right">
                             <div class="answer-box" style="border-left: 4px solid #10b981; background:#f0fff4;">
@@ -289,4 +342,3 @@ def generate_html_report(
         f.write(full_html)
     
     print(f"[SUCCESS] Report saved: {output_path}")
-

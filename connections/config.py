@@ -51,12 +51,8 @@ ELASTIC_API_KEY = os.getenv("ELASTIC_API_KEY")
 # =============================================================================
 
 DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-base")
-DEFAULT_EMBEDDING_DIMS = int(
-    os.getenv(
-        "EMBEDDING_DIMS",
-        str(EMBEDDING_MODELS.get(DEFAULT_EMBEDDING_MODEL, {}).get("dims", 1024)),
-    )
-)
+DEFAULT_EMBEDDING_DIMS = int(os.getenv("EMBEDDING_DIMS", "768"))
+
 # =============================================================================
 # RAG PARAMETERS
 # =============================================================================
